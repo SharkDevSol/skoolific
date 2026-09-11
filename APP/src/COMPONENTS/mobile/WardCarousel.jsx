@@ -27,7 +27,7 @@ const WardCarousel = ({ wards, onWardSelect, selectedWardId }) => {
             <div className={styles.wardHeader}>
               {ward.image_student ? (
                 <img
-                  src={`https://v2.skoolific.com/Uploads/${ward.image_student}`}
+                  src={`/Uploads/${ward.image_student}`}
                   alt={`${ward.student_name}'s profile`}
                   className={styles.wardAvatar}
                 />

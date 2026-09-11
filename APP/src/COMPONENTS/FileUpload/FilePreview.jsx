@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, File, FileText, Image as ImageIcon, Video, Music, Archive } from 'lucide-react';
 import styles from './FilePreview.module.css';
-import LazyImage from '../LazyImage';
 
 /**
  * FilePreview component for displaying file information and preview
@@ -60,7 +59,9 @@ const FilePreview = ({
    * Create preview URL for image files
    */
   useEffect(() => {
-    if (showPreview && file.type.startsWith('image/')) {
+    const looksLikeImage = file.type?.startsWith('image/') ||
+      (!file.type && /\.(jpe?g|png|gif|webp|bmp|svg|heic)$/i.test(file.name || ''));
+    if (showPreview && looksLikeImage) {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       
@@ -98,19 +99,21 @@ const FilePreview = ({
     }
   };
 
-  const isImage = file.type.startsWith('image/') && showPreview && !imageError;
+  const isImage = (showPreview && !imageError) && (
+    file.type?.startsWith('image/') ||
+    (!file.type && /\.(jpe?g|png|gif|webp|bmp|svg|heic)$/i.test(file.name || ''))
+  );
 
   return (
     <div className={`${styles.filePreview} ${disabled ? styles.disabled : ''}`}>
       {/* File icon or image preview */}
       <div className={styles.fileIconContainer}>
         {isImage && previewUrl ? (
-          <LazyImage
+          <img
             src={previewUrl}
             alt={file.name}
             className={styles.imagePreview}
-            eager
-            imgProps={{ onError: handleImageError }}
+            onError={handleImageError}
           />
         ) : (
           <div className={styles.fileIcon}>

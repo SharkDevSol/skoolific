@@ -20,7 +20,7 @@ const EvaluationFormDisplay = () => {
         setError(null);
 
         // Fetch evaluation details
-        const evaluationRes = await fetch(`https://v2.skoolific.com/api/evaluations/${id}`);
+        const evaluationRes = await fetch(`/api/evaluations/${id}`);
         if (!evaluationRes.ok) {
           throw new Error(`Failed to fetch evaluation details: ${evaluationRes.statusText}`);
         }
@@ -28,7 +28,7 @@ const EvaluationFormDisplay = () => {
         setEvaluation(evaluationData);
 
         // Fetch students and their existing responses
-        const studentsRes = await fetch(`https://v2.skoolific.com/api/evaluations/${id}/students`);
+        const studentsRes = await fetch(`/api/evaluations/${id}/students`);
         if (!studentsRes.ok) {
           throw new Error(`Failed to fetch students for evaluation: ${studentsRes.statusText}`);
         }
@@ -97,7 +97,7 @@ const EvaluationFormDisplay = () => {
     }));
 
     try {
-      const response = await fetch(`https://v2.skoolific.com/api/evaluations/${id}/responses`, {
+      const response = await fetch(`/api/evaluations/${id}/responses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

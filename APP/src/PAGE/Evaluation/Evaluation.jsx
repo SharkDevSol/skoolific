@@ -31,7 +31,7 @@ const CreateEvaluation = ({ evaluationId, onEvaluationCreated, onCancel }) => {
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const API_BASE = 'https://v2.skoolific.com/api/evaluations';
+    const API_BASE = '/api/evaluations';
 
     const fetchDependencies = useCallback(async ( ) => {
         try {
@@ -190,7 +190,7 @@ const ManageEvaluationAreas = ({ onAreaCreated }) => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
-    const API_BASE = 'https://v2.skoolific.com/api/evaluations';
+    const API_BASE = '/api/evaluations';
 
     const fetchAreas = useCallback(async () => {
         try {
@@ -359,7 +359,7 @@ const EvaluationManager = () => {
     const [error, setError] = useState('');
     const [filters, setFilters] = useState({ role: '', subject: '', class: '', search: '' });
     const [filterOptions, setFilterOptions] = useState({ roles: [], subjects: [], classes: [] });
-    const API_BASE = 'https://v2.skoolific.com/api/evaluations';
+    const API_BASE = '/api/evaluations';
 
     const fetchAllEvaluations = useCallback(async ( ) => {
         try {

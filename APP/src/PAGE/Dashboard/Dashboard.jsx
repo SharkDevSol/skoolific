@@ -336,7 +336,7 @@ const Dashboard = () => {
                   dataKey="students" 
                   stroke="#667eea" 
                   strokeWidth={3}
-                  name={t('students') || 'Students'}
+                  name={t('students.title') || 'Students'}
                   dot={{ fill: '#667eea', r: 6 }}
                   activeDot={{ r: 8 }}
                 />

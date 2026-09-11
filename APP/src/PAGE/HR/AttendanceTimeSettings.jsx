@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import styles from '../Finance/PaymentManagement.module.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const AttendanceTimeSettings = () => {
   const [settings, setSettings] = useState(null);
@@ -90,7 +90,7 @@ const AttendanceTimeSettings = () => {
   const fetchStaffList = async () => {
     setLoadingStaff(true);
     try {
-      const types = ['Teachers', 'Administrative Staff', 'Supportive Staff'];
+      const types = ['Teachers', 'Administrative Staff', 'Supportive Staff', 'Finance'];
       let allStaff = [];
       
       for (const staffType of types) {

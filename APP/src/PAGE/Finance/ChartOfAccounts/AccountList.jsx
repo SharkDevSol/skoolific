@@ -4,7 +4,7 @@ import styles from './AccountList.module.css';
 import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiEye, FiFilter } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
-const API_BASE = `${import.meta.env.VITE_API_URL || '/api'}/finance/accounts`;
+const API_BASE = `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/finance/accounts`;
 
 const AccountList = () => {
   const navigate = useNavigate();

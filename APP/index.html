@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/skoolific-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
     <!-- Cache Control -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -32,38 +32,23 @@
       connect-src 'self' http://localhost:3000 http://localhost:* http://127.0.0.1:* https: wss: ws://localhost:*;
       worker-src 'self' blob:;
       manifest-src 'self' blob:;
+      frame-src 'self' https://v2.skoolific.com;
     " />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     
-    <!-- Register Service Worker -->
+    <!-- Service Worker: disabled to prevent stale-app-shell caching -->
     <script>
-      // Temporarily disabled service worker to fix caching issues
-      // Unregister any existing service workers
+      // Unregister any existing service workers so the app always loads fresh code.
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(let registration of registrations) {
+          for (let registration of registrations) {
             registration.unregister();
-            console.log('🗑️ Service worker unregistered');
           }
         });
       }
-
-      /* Service worker disabled - uncomment to re-enable
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then((registration) => {
-              console.log('✅ SW registered:', registration);
-            })
-            .catch((error) => {
-              console.log('❌ SW registration failed:', error);
-            });
-        });
-      }
-      */
 
       // Add install prompt handler
       let deferredPrompt;

@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../config/db');
+const { branchSafeUpload } = require('../middleware/branchContextMiddleware');
 const rag = require('../services/ragPipeline');
 const orchestrator = require('../services/aiOrchestrator');
 const embedder = require('../services/embeddingService');
@@ -33,7 +34,7 @@ router.use(optionalAuth);
 // ─── BOOKS ────────────────────────────────────────────────────
 
 // Upload book(s)
-router.post('/books/upload', aiUploadLimiter, upload.array('files', 20), async (req, res) => {
+router.post('/books/upload', aiUploadLimiter, ...branchSafeUpload(upload.array('files', 20)), async (req, res) => {
   try {
     const files = req.files;
     if (!files || files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
@@ -483,7 +484,7 @@ router.put('/prompts/:id', async (req, res) => {
 });
 
 // ─── OCR — Extract text from scanned documents ──────────────
-router.post('/ocr', upload.single('file'), async (req, res) => {
+router.post('/ocr', ...branchSafeUpload(upload.single('file')), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const ocr = require('../services/ocrService');

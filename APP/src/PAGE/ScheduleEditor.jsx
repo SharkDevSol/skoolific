@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { formatAPIError } from '../utils/errorMessages';
+import { getBranchCode } from '../utils/branchCode';
 
 const DAY_NAMES = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday' };
 
@@ -13,7 +14,7 @@ const ScheduleEditor = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const h = { 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() };
+  const h = { 'x-branch-code': getBranchCode() };
 
   const fetchData = async () => {
     setLoading(true);

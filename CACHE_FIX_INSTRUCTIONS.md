@@ -20,7 +20,7 @@ scp APP/dist/index.html root@76.13.48.245:/var/www/skoolific/iqrab3/APP/dist/
 **Option B: Using SFTP Client (FileZilla, WinSCP, etc.)**
 1. Connect to: 76.13.48.245
 2. Username: root
-3. Password: V@gSWi)Po712@TaWR3r9
+3. Password: [REDACTED-PASSWORD]
 4. Navigate to: `/var/www/skoolific/iqrab3/APP/dist/`
 5. Upload `APP/dist/index.html` (overwrite existing file)
 

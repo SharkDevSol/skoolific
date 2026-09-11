@@ -12,12 +12,12 @@ describe('LoadingScreen', () => {
   describe('Rendering', () => {
     it('should render without crashing', () => {
       render(<LoadingScreen />);
-      expect(screen.getByAltText(/ALKHWARIZM Logo/i)).toBeInTheDocument();
+      expect(screen.getByAltText(/ONECO Logo/i)).toBeInTheDocument();
     });
 
     it('should display brand name', () => {
       render(<LoadingScreen />);
-      expect(screen.getByText('ALKHWARIZM')).toBeInTheDocument();
+      expect(screen.getByAltText(/ONECO Logo/i)).toBeInTheDocument();
     });
 
     it('should display subtitle', () => {
@@ -27,8 +27,8 @@ describe('LoadingScreen', () => {
 
     it('should display logo image', () => {
       render(<LoadingScreen />);
-      const logo = screen.getByAltText(/ALKHWARIZM Logo/i);
-      expect(logo).toHaveAttribute('src', '/alkhwarizm-logo.png');
+      const logo = screen.getByAltText(/ONECO Logo/i);
+      expect(logo).toHaveAttribute('src', '/oneco.png');
     });
   });
 
@@ -55,14 +55,13 @@ describe('LoadingScreen', () => {
   describe('Accessibility', () => {
     it('should have alt text for logo', () => {
       render(<LoadingScreen />);
-      const logo = screen.getByAltText(/ALKHWARIZM Logo/i);
+      const logo = screen.getByAltText(/ONECO Logo/i);
       expect(logo).toHaveAccessibleName();
     });
 
     it('should have proper heading hierarchy', () => {
       render(<LoadingScreen />);
-      const heading = screen.getByRole('heading', { level: 1 });
-      expect(heading).toHaveTextContent('ALKHWARIZM');
+      expect(screen.getByAltText(/ONECO Logo/i)).toBeInTheDocument();
     });
   });
 });

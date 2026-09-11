@@ -420,7 +420,8 @@ router.get('/staff/:staffId/shift', async (req, res) => {
     const schemas = [
       { name: 'staff_teachers', type: 'Teachers' },
       { name: 'staff_administrative_staff', type: 'Administrative Staff' },
-      { name: 'staff_supportive_staff', type: 'Supportive Staff' }
+      { name: 'staff_supportive_staff', type: 'Supportive Staff' },
+      { name: 'staff_finance', type: 'Finance' }
     ];
     
     let shiftAssignment = null;
@@ -498,6 +499,8 @@ router.put('/staff/:staffType/:className/:staffId/shift', async (req, res) => {
       schemaName = 'staff_administrative_staff';
     } else if (staffType === 'Supportive Staff') {
       schemaName = 'staff_supportive_staff';
+    } else if (staffType === 'Finance') {
+      schemaName = 'staff_finance';
     } else {
       console.log('❌ Invalid staff type');
       return res.status(400).json({

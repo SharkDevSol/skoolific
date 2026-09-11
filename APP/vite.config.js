@@ -24,11 +24,11 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5053,
+    port: 6006,
     hmr: {
       protocol: 'ws',
       host: 'localhost',
-      port: 5053,
+    port: 6005,
     },
     https: fs.existsSync('./certs/cert.pem') ? {
       key: fs.readFileSync('./certs/key.pem'),
@@ -36,7 +36,7 @@ export default defineConfig({
     } : false,
     proxy: {
       '/api': {
-        target: 'http://localhost:5052', 
+        target: 'http://localhost:6005', 
         changeOrigin: true,
         rewrite: (path) => path,
         configure: (proxy, options) => {

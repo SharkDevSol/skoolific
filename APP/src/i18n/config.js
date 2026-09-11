@@ -6,6 +6,8 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import enTranslations from './locales/en.json';
 import amTranslations from './locales/am.json';
 import arTranslations from './locales/ar.json';
+import soTranslations from './locales/so.json';
+import omTranslations from './locales/om.json';
 
 i18n
   // Detect user language
@@ -17,7 +19,9 @@ i18n
     resources: {
       en: { translation: enTranslations },
       am: { translation: amTranslations },
-      ar: { translation: arTranslations }
+      ar: { translation: arTranslations },
+      so: { translation: soTranslations },
+      om: { translation: omTranslations }
     },
     fallbackLng: 'en',
     debug: false,

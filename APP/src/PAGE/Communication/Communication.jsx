@@ -33,7 +33,7 @@ const Communication = ({ activeChatId, userId, requests = [] }) => {
       return;
     }
 
-    socket.current = io('https://v2.skoolific.com');
+    socket.current = io('');
     socket.current.emit('join', actualUserId.toString());
 
     socket.current.on('new_request', (request) => {

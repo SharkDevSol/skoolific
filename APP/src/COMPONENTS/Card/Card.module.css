@@ -6,7 +6,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-base);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .hoverable:hover {

@@ -102,11 +102,19 @@ router.post('/generate', authenticateWithBranch, async (req, res) => {
       
       // Generate invoice number
       const invoiceNumber = await generateInvoiceNumber();
-      
+
+      // Generate unique 10-digit invoice reference code
+      const { generateUniqueInvoiceRefCode } = require('../../utils/invoiceRefCode');
+      const invoiceRefCode = await generateUniqueInvoiceRefCode(async (code) => {
+        const existing = await prisma.invoice.findUnique({ where: { invoiceRefCode: code } });
+        return !!existing;
+      });
+
       // Create invoice
       const invoice = await tx.invoice.create({
         data: {
           invoiceNumber,
+          invoiceRefCode,
           studentId,
           academicYearId,
           termId,

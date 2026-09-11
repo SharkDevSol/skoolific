@@ -44,22 +44,22 @@ PostgreSQL Server
 ```sql
 -- Master database user (for registry)
 User: postgres
-Password: 12345678
+Password: [REDACTED-PASSWORD]
 Access: skoolific_master only
 
 -- IQRA school user (owns all IQRA databases)
 User: iqra_user
-Password: iqra_secure_password_2024
+Password: [REDACTED-PASSWORD]
 Access: iqrab1_db, iqrab2_db, iqrab3_db
 
 -- BILAL school user (owns all BILAL databases)
 User: bilal_user
-Password: bilal_secure_password_2024
+Password: [REDACTED-PASSWORD]
 Access: bilalb1_db, bilalb2_db
 
 -- ALMARKAZ school user
 User: almarkaz_user
-Password: almarkaz_secure_password_2024
+Password: [REDACTED-PASSWORD]
 Access: almarkazb1_db, almarkazb2_db
 ```
 
@@ -84,9 +84,9 @@ CREATE TABLE schools (
 
 -- Example data:
 INSERT INTO schools (school_name, school_code, db_user, db_password) VALUES
-('IQRA School', 'IQRA', 'iqra_user', 'iqra_secure_password_2024'),
-('BILAL School', 'BILAL', 'bilal_user', 'bilal_secure_password_2024'),
-('Al-Markaz School', 'ALMARKAZ', 'almarkaz_user', 'almarkaz_secure_password_2024');
+('IQRA School', 'IQRA', 'iqra_user', '[REDACTED-PASSWORD]'),
+('BILAL School', 'BILAL', 'bilal_user', '[REDACTED-PASSWORD]'),
+('Al-Markaz School', 'ALMARKAZ', 'almarkaz_user', '[REDACTED-PASSWORD]');
 ```
 
 ### Table: branches
@@ -168,7 +168,7 @@ async function setupMultiSchoolSystem() {
     port: 5432,
     database: 'postgres',
     user: 'postgres',
-    password: '12345678'
+    password: '[REDACTED-PASSWORD]'
   });
 
   await masterClient.connect();
@@ -194,7 +194,7 @@ async function setupMultiSchoolSystem() {
     port: 5432,
     database: 'skoolific_master',
     user: 'postgres',
-    password: '12345678'
+    password: '[REDACTED-PASSWORD]'
   });
 
   await client.connect();
@@ -266,14 +266,14 @@ async function setupMultiSchoolSystem() {
       name: 'IQRA School',
       code: 'IQRA',
       user: 'iqra_user',
-      password: 'iqra_secure_password_2024',
+      password: '[REDACTED-PASSWORD]',
       description: 'IQRA Islamic School Network'
     },
     {
       name: 'BILAL School',
       code: 'BILAL',
       user: 'bilal_user',
-      password: 'bilal_secure_password_2024',
+      password: '[REDACTED-PASSWORD]',
       description: 'BILAL Education System'
     }
   ];
@@ -304,7 +304,7 @@ async function setupMultiSchoolSystem() {
     port: 5432,
     database: 'postgres',
     user: 'postgres',
-    password: '12345678'
+    password: '[REDACTED-PASSWORD]'
   });
 
   await dbClient.connect();
@@ -397,7 +397,7 @@ class MultiSchoolManager {
       port: 5432,
       database: 'skoolific_master',
       user: 'postgres',
-      password: '12345678'
+      password: '[REDACTED-PASSWORD]'
     });
 
     // Cache for school database pools
@@ -439,7 +439,7 @@ class MultiSchoolManager {
       port: 5432,
       database: 'postgres',
       user: 'postgres',
-      password: '12345678'
+      password: '[REDACTED-PASSWORD]'
     });
 
     await dbClient.connect();
@@ -461,7 +461,7 @@ class MultiSchoolManager {
       port: 5432,
       database: databaseName,
       user: 'postgres',
-      password: '12345678'
+      password: '[REDACTED-PASSWORD]'
     });
 
     await grantClient.connect();

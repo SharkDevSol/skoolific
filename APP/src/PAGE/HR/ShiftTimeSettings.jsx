@@ -6,7 +6,7 @@ import Card from '../../COMPONENTS/Card/Card';
 import Button from '../../COMPONENTS/Button/Button';
 import Input from '../../COMPONENTS/Input/Input';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const ShiftTimeSettings = () => {
   const { t } = useTranslation();

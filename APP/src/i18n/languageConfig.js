@@ -54,6 +54,24 @@ export const SUPPORTED_LANGUAGES = [
     fontFamily: 'var(--font-sans)',
     requiresCustomFont: false,
   },
+  {
+    code: 'so',
+    name: 'Somali',
+    nativeName: 'Soomaali',
+    direction: 'ltr',
+    flag: '🇸🇴',
+    fontFamily: 'var(--font-sans)',
+    requiresCustomFont: false,
+  },
+  {
+    code: 'om',
+    name: 'Oromo',
+    nativeName: 'Afaan Oromoo',
+    direction: 'ltr',
+    flag: '🇪🇹',
+    fontFamily: 'var(--font-sans)',
+    requiresCustomFont: false,
+  },
 ];
 
 /**

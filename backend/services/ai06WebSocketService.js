@@ -8,6 +8,7 @@ class AI06WebSocketService {
     this.wss = null;
     this.devices = new Map(); // Store connected devices by serial number
     this.io = null; // Socket.IO instance for real-time dashboard updates
+    this.branchCode = (process.env.AI06_BRANCH_CODE || 'IQRA1').toUpperCase();
   }
 
   // Initialize WebSocket server
@@ -23,6 +24,7 @@ class AI06WebSocketService {
     
     this.wss.on('connection', (ws, req) => {
       const clientIP = req.socket.remoteAddress;
+      ws._ai06ClientIP = clientIP;
       console.log(`\n========================================`);
       console.log(`📱 NEW DEVICE CONNECTION`);
       console.log(`========================================`);
@@ -45,8 +47,8 @@ class AI06WebSocketService {
         console.log(`   IP Address: ${clientIP}`);
         console.log(`   Time: ${new Date().toLocaleString()}`);
         // Remove from devices map
-        for (const [sn, socket] of this.devices.entries()) {
-          if (socket === ws) {
+        for (const [sn, device] of this.devices.entries()) {
+          if (device.ws === ws) {
             this.devices.delete(sn);
             console.log(`   Device ${sn} removed from active devices`);
             break;
@@ -117,18 +119,29 @@ class AI06WebSocketService {
   async handleRegistration(ws, message) {
     const { sn, devinfo } = message;
     
+    // Device belongs to the branch this backend serves
+    const deviceBranch = this.branchCode;
+    
     console.log(`✅ Device registered: ${sn}`);
+    console.log(`   Branch: ${deviceBranch}`);
+    console.log(`   IP: ${ws._ai06ClientIP || 'unknown'}`);
     console.log(`Model: ${devinfo.modelname}`);
     console.log(`Users: ${devinfo.useduser}/${devinfo.usersize}`);
     console.log(`Logs: ${devinfo.usedlog}/${devinfo.logsize}`);
     
-    // Store device connection
-    this.devices.set(sn, ws);
+    // Store device connection with branch binding
+    this.devices.set(sn, {
+      ws: ws,
+      branchCode: deviceBranch,
+      ip: ws._ai06ClientIP || 'unknown',
+      connectedAt: new Date().toISOString()
+    });
     
     // Send registration response
     const response = {
       ret: 'reg',
       result: true,
+      branch: deviceBranch,
       cloudtime: new Date().toISOString()
     };
     
@@ -190,9 +203,28 @@ class AI06WebSocketService {
   async saveAttendanceToDatabase(machineId, name, scanTime, mode, inout) {
     try {
       const { Pool } = require('pg');
-      const pool = new Pool({
-        connectionString: process.env.DATABASE_URL
-      });
+      
+      // Resolve this branch's database (IQRA1 -> iqrab1, IQRA2 -> iqrab2, ...)
+      const branchMap = {
+        'IQRA1': 'iqrab1',
+        'IQRA2': 'iqrab2',
+        'IQRA3': 'iqrab3',
+        'IQRA4': 'iqrab4',
+        'IQRA5': 'iqrab5'
+      };
+      const dbName = branchMap[this.branchCode] || (process.env.DATABASE_URL ? null : 'iqrab1');
+      
+      const pool = dbName
+        ? new Pool({
+            user: process.env.DB_USER || 'iqra',
+            password: process.env.DB_PASSWORD || 'iqra1768',
+            host: process.env.DB_HOST || 'localhost',
+            port: parseInt(process.env.DB_PORT, 10) || 5432,
+            database: dbName
+          })
+        : new Pool({ connectionString: process.env.DATABASE_URL });
+      
+      console.log(`   Branch DB: ${dbName || process.env.DATABASE_URL}`);
 
       // Use Machine ID and name directly from device - no lookup needed!
       console.log(`\n💾 ========================================`);
@@ -296,7 +328,8 @@ class AI06WebSocketService {
       const staffTables = [
         { schema: 'staff_teachers', idColumn: 'machine_id' },
         { schema: 'staff_administrative_staff', idColumn: 'machine_id' },
-        { schema: 'staff_supportive_staff', idColumn: 'machine_id' }
+        { schema: 'staff_supportive_staff', idColumn: 'machine_id' },
+        { schema: 'staff_finance', idColumn: 'machine_id' }
       ];
       
       for (const table of staffTables) {
@@ -843,20 +876,25 @@ class AI06WebSocketService {
 
   // Send command to device
   sendCommand(sn, command) {
-    const ws = this.devices.get(sn);
+    const device = this.devices.get(sn);
     
-    if (!ws) {
+    if (!device) {
       console.error(`Device ${sn} not connected`);
       return false;
     }
     
-    ws.send(JSON.stringify(command));
+    device.ws.send(JSON.stringify(command));
     return true;
   }
 
-  // Get list of connected devices
+  // Get list of connected devices with branch binding
   getConnectedDevices() {
-    return Array.from(this.devices.keys());
+    return Array.from(this.devices.entries()).map(([sn, device]) => ({
+      serialNumber: sn,
+      branch: device.branchCode,
+      ip: device.ip,
+      connectedAt: device.connectedAt
+    }));
   }
 
   // Stop the server

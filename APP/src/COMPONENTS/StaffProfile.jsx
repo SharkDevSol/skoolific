@@ -19,7 +19,7 @@ import {
 import styles from './StaffProfile.module.css';
 
 // API base URL - use environment variable or fallback to localhost
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5052/api';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || 'http://localhost:5052/api'));
 
 // Inline component to create mark list when not found
 const MarkListCreateInline = ({ subject, className, term, onCreated }) => {

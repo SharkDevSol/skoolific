@@ -6,10 +6,10 @@ const branchContext = new AsyncLocalStorage();
 
 // Master pool (used when no branch code is present or for system-level queries)
 const masterPool = new Pool({
-  user: process.env.DB_USER || 'postgres',
+  user: process.env.DB_USER || 'iqra',
   host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'school_management10',
-  password: String(process.env.DB_PASSWORD),
+  database: process.env.DB_NAME || 'iqrab1',
+  password: String(process.env.DB_PASSWORD || 'iqra1768'),
   port: process.env.DB_PORT || 5432,
 });
 
@@ -29,7 +29,11 @@ function getDbManager() {
 // Resolve the correct pool for the current request context
 async function resolvePool() {
   const branchCode = branchContext.getStore();
-  if (!branchCode) return masterPool;
+  if (!branchCode) {
+    // No branch code set — this is a system-level operation (startup init, health check, etc.)
+    // Use master pool for these operations.
+    return masterPool;
+  }
   
   try {
     const manager = getDbManager();
@@ -37,9 +41,11 @@ async function resolvePool() {
       return await manager.getPool(branchCode);
     }
   } catch (error) {
-    console.warn(`Branch pool not available for "${branchCode}", using master:`, error.message);
+    console.error(`CRITICAL: Branch pool not available for "${branchCode}":`, error.message);
+    // Don't fall back to master — throw instead, so the caller knows routing failed
+    throw new Error(`Cannot route to branch "${branchCode}": ${error.message}`);
   }
-  return masterPool;
+  throw new Error(`No database manager available for branch "${branchCode}"`);
 }
 
 // Branch-aware pool wrapper - auto-routes queries to the correct branch database

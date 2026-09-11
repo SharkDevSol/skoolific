@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FiUsers, FiSearch, FiFilter, FiEye, FiEyeOff, FiUserX, FiUserCheck,
@@ -16,10 +17,17 @@ import styles from './ListStaff.module.css';
 
 import Table from '../../../COMPONENTS/Table/Table';
 import Input from '../../../COMPONENTS/Input/Input';
+import { getBranchCode } from '../../../utils/branchCode';
 import Select from '../../../COMPONENTS/Select/Select';
 import Button from '../../../COMPONENTS/Button/Button';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5052/api';
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+  if (typeof window !== 'undefined') return window.location.origin + '/api';
+  return 'http://localhost:5052/api';
+};
+const API_BASE_URL = getApiBaseUrl();
 const ListStaff = () => {
   const { t: tApp } = useApp();
   const { t: ti18n } = useTranslation();
@@ -48,6 +56,11 @@ const ListStaff = () => {
   const [staffTypes, setStaffTypes] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
+  const canViewPassword = localStorage.getItem('userType') === 'admin';
+  const branchHeaders = (() => {
+    const code = getBranchCode();
+    return code ? { 'X-Branch-Code': code } : {};
+  })();
   const itemsPerPage = 12;
 
   const copyToClipboard = (text) => {
@@ -60,20 +73,22 @@ const ListStaff = () => {
   const fetchAllStaff = async () => {
     setLoading(true);
     try {
-      const types = ['Supportive Staff', 'Administrative Staff', 'Teachers'];
+      const types = ['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'];
       let allStaff = [];
       const foundTypes = [];
       
-      // Add query parameter to fetch inactive staff if showInactive is true
-      const includeInactiveParam = showInactive ? '?includeInactive=only' : '';
+      const params = new URLSearchParams();
+      if (showInactive) params.set('includeInactive', 'only');
+      if (canViewPassword) params.set('includePassword', 'true');
+      const queryString = params.toString() ? `?${params.toString()}` : '';
       
       for (const staffType of types) {
         try {
-          const classesResponse = await axios.get(`${API_BASE_URL}/staff/classes?staffType=${encodeURIComponent(staffType)}`);
+          const classesResponse = await axios.get(`${API_BASE_URL}/staff/classes?staffType=${encodeURIComponent(staffType)}`, { headers: branchHeaders });
           if (classesResponse.data.length > 0) foundTypes.push(staffType);
           
           for (const className of classesResponse.data) {
-            const dataResponse = await axios.get(`${API_BASE_URL}/staff/data/${staffType}/${className}${includeInactiveParam}`);
+            const dataResponse = await axios.get(`${API_BASE_URL}/staff/data/${staffType}/${className}${queryString}`, { headers: branchHeaders });
             const staffWithMeta = dataResponse.data.data.map((staff, idx) => ({ 
               ...staff, 
               staffType, 
@@ -108,6 +123,29 @@ const ListStaff = () => {
     setCurrentPage(1);
   };
 
+  const handleExportExcel = () => {
+    if (filteredData.length === 0) {
+      alert('No staff to export');
+      return;
+    }
+    const rows = filteredData.map(staff => {
+      const row = {};
+      Object.entries(staff).forEach(([key, value]) => {
+        if (['uniqueId', 'id', 'password_hash', 'created_at'].includes(key)) return;
+        if (typeof value === 'object' && value !== null) {
+          row[formatLabel(key)] = '';
+          return;
+        }
+        row[formatLabel(key)] = value ?? '';
+      });
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Staff');
+    XLSX.writeFile(wb, `staff_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const getStaffFiles = (staff) => {
     return Object.entries(staff).filter(([key, value]) => 
       value && key !== 'image_staff' && (isFileField(key) || looksLikeFile(value))
@@ -131,7 +169,8 @@ const ListStaff = () => {
       try {
         await axios.put(
           `${API_BASE_URL}/staff/toggle-active/${staff.global_staff_id || staff.id}`,
-          { is_active: true }
+          { is_active: true },
+          { headers: branchHeaders }
         );
         alert('Staff activated successfully! They are now visible in all system lists.');
         fetchAllStaff();
@@ -146,7 +185,8 @@ const ListStaff = () => {
       try {
         await axios.put(
           `${API_BASE_URL}/staff/toggle-active/${staff.global_staff_id || staff.id}`,
-          { is_active: false }
+          { is_active: false },
+          { headers: branchHeaders }
         );
         alert('Staff deactivated successfully! They are now hidden from all system lists.');
         fetchAllStaff();
@@ -161,7 +201,8 @@ const ListStaff = () => {
     if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
     try {
       await axios.delete(`${API_BASE_URL}/staff/delete-staff`, {
-        data: { globalStaffId: staff.global_staff_id || staff.id, staffType: staff.staffType, className: staff.className }
+        data: { globalStaffId: staff.global_staff_id || staff.id, staffType: staff.staffType, className: staff.className },
+        headers: branchHeaders
       });
       alert(`"${name}" deleted successfully`);
       fetchAllStaff();
@@ -179,7 +220,8 @@ const ListStaff = () => {
     // Fetch column metadata for proper field rendering
     try {
       const response = await axios.get(
-        `${API_BASE_URL}/staff/columns/${encodeURIComponent(staff.staffType)}/${encodeURIComponent(staff.className)}`
+        `${API_BASE_URL}/staff/columns/${encodeURIComponent(staff.staffType)}/${encodeURIComponent(staff.className)}`,
+        { headers: branchHeaders }
       );
       setColumnMetadata(response.data || []);
     } catch (error) {
@@ -366,7 +408,7 @@ const ListStaff = () => {
       await axios.put(
         `${API_BASE_URL}/staff/update/${selectedStaff.global_staff_id || selectedStaff.id}`,
         formDataToSend,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        { headers: branchHeaders }
       );
 
       alert('✅ Staff updated successfully!');
@@ -395,10 +437,11 @@ const ListStaff = () => {
       key: 'photo', header: 'Photo', width: '80px', sortable: false,
       render: (_, staff) => {
         const isInactive = staff.is_active === false || staff.is_active === 'false';
+        const photoUrl = getFileUrl(staff.image_staff, 'staff');
         return (
           <div className={styles.tableImageWrapper}>
-            {staff.image_staff ? (
-              <img src={getFileUrl(staff.image_staff, 'staff')} alt="" className={styles.tableImage} />
+            {photoUrl ? (
+              <img src={photoUrl} alt="" className={styles.tableImage} />
             ) : (
               <div className={styles.tableAvatar}><FiUser /></div>
             )}
@@ -562,6 +605,13 @@ const ListStaff = () => {
           {t('refresh') || 'Refresh'}
         </Button>
         <Button 
+          variant="secondary" 
+          onClick={handleExportExcel}
+          icon={<FiDownload />}
+        >
+          Download Excel
+        </Button>
+        <Button 
           variant={showInactive ? "primary" : "secondary"}
           onClick={() => setShowInactive(!showInactive)}
           icon={showInactive ? <FiUserCheck /> : <FiUserX />}
@@ -594,7 +644,7 @@ const ListStaff = () => {
                   onClick={() => { setSelectedStaff(staff); setShowModal(true); }}
                 >
                   <div className={styles.cardHeader}>
-                    {staff.image_staff ? (
+                    {getFileUrl(staff.image_staff, 'staff') ? (
                       <img 
                         src={getFileUrl(staff.image_staff, 'staff')} 
                         alt={staff.full_name || staff.name} 
@@ -729,7 +779,7 @@ const ListStaff = () => {
                 <FiX />
               </button>
               <div className={styles.modalHeader}>
-                {selectedStaff.image_staff ? (
+                {getFileUrl(selectedStaff.image_staff, 'staff') ? (
                   <img 
                     src={getFileUrl(selectedStaff.image_staff, 'staff')} 
                     alt="" 
@@ -773,7 +823,7 @@ const ListStaff = () => {
                 </div>
                 
                 {/* Credentials Section */}
-                {(selectedStaff.username || selectedStaff.password || selectedStaff.password_hash) && (
+                {(selectedStaff.username || (canViewPassword && (selectedStaff.password || selectedStaff.password_hash))) && (
                   <div className={styles.modalSection}>
                     <h3><FiLock /> {t('loginCredentials')}</h3>
                     <div className={styles.credentialsGrid}>
@@ -792,7 +842,7 @@ const ListStaff = () => {
                           </div>
                         </div>
                       )}
-                      {(selectedStaff.password || selectedStaff.password_hash) && (
+                      {canViewPassword && (selectedStaff.password || selectedStaff.password_hash) && (
                         <div className={styles.credentialRow}>
                           <span className={styles.credentialLabel}>{t('password')}</span>
                           <div className={styles.credentialValue}>
@@ -947,7 +997,7 @@ const ListStaff = () => {
               </button>
               
               <div className={styles.modalHeader}>
-                {selectedStaff.image_staff ? (
+                {getFileUrl(selectedStaff.image_staff, 'staff') ? (
                   <img 
                     src={getFileUrl(selectedStaff.image_staff, 'staff')} 
                     alt="" 
@@ -975,7 +1025,7 @@ const ListStaff = () => {
                   <h3><FiUser /> Profile Image</h3>
                   <div className={styles.imageUploadContainer}>
                     <div className={styles.currentImagePreview}>
-                      {selectedStaff.image_staff ? (
+                      {getFileUrl(selectedStaff.image_staff, 'staff') ? (
                         <img 
                           src={getFileUrl(selectedStaff.image_staff, 'staff')} 
                           alt="Current" 
@@ -1098,7 +1148,7 @@ const ListStaff = () => {
                 })()}
 
                 {/* Login Credentials Section - Read Only */}
-                {(selectedStaff.username || selectedStaff.password || selectedStaff.password_hash) && (
+                {(selectedStaff.username || (canViewPassword && (selectedStaff.password || selectedStaff.password_hash))) && (
                   <div className={styles.modalSection}>
                     <h3><FiLock /> {t('loginCredentials')}</h3>
                     <div className={styles.credentialsGrid}>
@@ -1117,7 +1167,7 @@ const ListStaff = () => {
                           </div>
                         </div>
                       )}
-                      {(selectedStaff.password || selectedStaff.password_hash) && (
+                      {canViewPassword && (selectedStaff.password || selectedStaff.password_hash) && (
                         <div className={styles.credentialRow}>
                           <span className={styles.credentialLabel}>{t('password')}</span>
                           <div className={styles.credentialValue}>

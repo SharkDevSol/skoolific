@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getBranchCode } from '../../utils/branchCode';
 import styles from './ProfileMenu.module.css';
 
 /**
@@ -19,7 +20,7 @@ const ProfileMenu = ({ user, onLogout, onProfileClick, className = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  const branchCode = localStorage.getItem('branchCode') || sessionStorage.getItem('branchCode');
+  const branchCode = getBranchCode();
 
   const profileMenuClasses = [
     styles.profileMenu,

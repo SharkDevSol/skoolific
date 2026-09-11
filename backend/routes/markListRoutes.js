@@ -747,6 +747,33 @@ router.put('/update-marks', async (req, res) => {
     
     await client.query('COMMIT');
     res.json({ message: 'Marks updated successfully', total, passStatus });
+
+    // ---- Push notification to the student's guardian (non-blocking) ----
+    try {
+      // Resolve student_name from the mark-list row (studentId)
+      const studentRow = await pool.query(
+        `SELECT student_name FROM ${schemaName}.${tableName} WHERE id = $1 LIMIT 1`,
+        [studentId]
+      );
+      const studentName = studentRow.rows[0]?.student_name;
+      if (studentName) {
+        // Look up the guardian username from the class table for this student
+        const g = await pool.query(
+          `SELECT guardian_username, guardian_name FROM classes_schema."${className}" WHERE student_name = $1 LIMIT 1`,
+          [studentName]
+        );
+        const guardianUsername = g.rows[0]?.guardian_username;
+        const guardianName = g.rows[0]?.guardian_name || 'Parent';
+        if (guardianUsername) {
+          const { notifyGuardianPush } = require('../services/guardianPush');
+          notifyGuardianPush(guardianUsername, '📊 New Marks Added', `${studentName} got ${total}% in ${subjectName} (Term ${termNumber}).`, {
+            type: 'marks', student_name: studentName, subject: subjectName, total: String(total)
+          }).catch(() => {});
+        }
+      }
+    } catch (pushErr) {
+      console.warn('Marks push notification failed (non-blocking):', pushErr.message);
+    }
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error updating marks:', error);
@@ -807,19 +834,20 @@ router.get('/ranking/:className/:termNumber', async (req, res) => {
   const className = req.params.className.toLowerCase();
   
   try {
-    // Validate class exists
+    // Validate class exists (case-insensitive)
     const classResult = await pool.query(
       `SELECT table_name FROM information_schema.tables 
-       WHERE table_schema = 'classes_schema' AND table_name = $1`,
+       WHERE table_schema = 'classes_schema' AND LOWER(table_name) = LOWER($1)`,
       [className]
     );
     if (classResult.rows.length === 0) {
       return res.status(404).json({ error: `Class ${className} not found` });
     }
+    const actualClassName = classResult.rows[0].table_name;
     
     // Get subjects for this class
     const subjectsResult = await pool.query(
-      'SELECT subject_name FROM subjects_of_school_schema.subject_class_mappings WHERE class_name = $1',
+      'SELECT subject_name FROM subjects_of_school_schema.subject_class_mappings WHERE LOWER(class_name) = LOWER($1)',
       [className]
     );
     
@@ -853,7 +881,7 @@ router.get('/ranking/:className/:termNumber', async (req, res) => {
     try {
       const activeStudentsResult = await pool.query(`
         SELECT student_name 
-        FROM classes_schema."${className}" 
+        FROM classes_schema."${actualClassName}" 
         WHERE is_active = TRUE OR is_active IS NULL
       `);
       activeStudentsResult.rows.forEach(row => activeStudentNames.add(row.student_name));
@@ -1080,19 +1108,20 @@ router.get('/comprehensive-ranking/:className/:termNumber', async (req, res) => 
   const className = req.params.className.toLowerCase();
   
   try {
-    // Validate class exists in classes_schema
+    // Validate class exists in classes_schema (case-insensitive)
     const classResult = await pool.query(
       `SELECT table_name FROM information_schema.tables 
-       WHERE table_schema = 'classes_schema' AND table_name = $1`,
+       WHERE table_schema = 'classes_schema' AND LOWER(table_name) = LOWER($1)`,
       [className]
     );
     if (classResult.rows.length === 0) {
       return res.status(404).json({ error: `Class ${className} not found in classes_schema` });
     }
+    const actualClassName = classResult.rows[0].table_name;
     
     // Get subjects for this class from subject_class_mappings
     const subjectsResult = await pool.query(
-      'SELECT subject_name FROM subjects_of_school_schema.subject_class_mappings WHERE class_name = $1',
+      'SELECT subject_name FROM subjects_of_school_schema.subject_class_mappings WHERE LOWER(class_name) = LOWER($1)',
       [className]
     );
     
@@ -1159,7 +1188,7 @@ router.get('/comprehensive-ranking/:className/:termNumber', async (req, res) => 
     try {
       const activeStudentsResult = await pool.query(`
         SELECT student_name 
-        FROM classes_schema."${className}" 
+        FROM classes_schema."${actualClassName}" 
         WHERE is_active = TRUE OR is_active IS NULL
       `);
       activeStudentsResult.rows.forEach(row => activeStudentNames.add(row.student_name));
@@ -1216,6 +1245,152 @@ router.get('/comprehensive-ranking/:className/:termNumber', async (req, res) => 
   } catch (error) {
     console.error('Error calculating comprehensive ranking:', error);
     res.status(500).json({ error: 'Failed to calculate ranking', details: error.message });
+  }
+});
+
+// Route to get full ranking across all terms for report card
+router.get('/full-ranking/:className', async (req, res) => {
+  const className = req.params.className.toLowerCase();
+  
+  try {
+    // Validate class exists (case-insensitive)
+    const classResult = await pool.query(
+      `SELECT table_name FROM information_schema.tables 
+       WHERE table_schema = 'classes_schema' AND LOWER(table_name) = LOWER($1)`,
+      [className]
+    );
+    if (classResult.rows.length === 0) {
+      return res.status(404).json({ error: `Class ${className} not found in classes_schema` });
+    }
+    const actualClassName = classResult.rows[0].table_name;
+    
+    // Fetch term count from school_config
+    const configResult = await pool.query(
+      'SELECT term_count FROM subjects_of_school_schema.school_config WHERE id = 1'
+    );
+    const termCount = configResult.rows.length > 0 ? configResult.rows[0].term_count : 2;
+    
+    // Get subjects for this class, sorted alphabetically
+    const subjectsResult = await pool.query(
+      'SELECT subject_name FROM subjects_of_school_schema.subject_class_mappings WHERE LOWER(class_name) = LOWER($1) ORDER BY subject_name ASC',
+      [className]
+    );
+    const subjects = subjectsResult.rows.map(s => s.subject_name);
+    
+    // Fetch data for each term
+    const terms = [];
+    for (let termNum = 1; termNum <= termCount; termNum++) {
+      const studentData = {};
+      const subjectDetails = {};
+      
+      for (const subjectName of subjects) {
+        const schemaName = `subject_${subjectName.toLowerCase().replace(/[\s\-\.]+/g, '_')}_schema`;
+        const tableName = `${className}_term_${termNum}`;
+        
+        try {
+          const [marksResult, configResult] = await Promise.all([
+            pool.query(`SELECT student_name, total, pass_status FROM ${schemaName}.${tableName}`),
+            pool.query(`SELECT * FROM ${schemaName}.form_config WHERE class_name = $1 AND term_number = $2`, 
+                      [className, termNum])
+          ]);
+          
+          subjectDetails[subjectName] = {
+            config: configResult.rows[0] || null,
+            hasData: marksResult.rows.length > 0
+          };
+          
+          for (const mark of marksResult.rows) {
+            if (!studentData[mark.student_name]) {
+              studentData[mark.student_name] = {
+                studentName: mark.student_name,
+                subjects: {},
+                totalMarks: 0,
+                subjectCount: 0,
+                passedSubjects: 0,
+                failedSubjects: 0
+              };
+            }
+            const total = Math.min(mark.total || 0, 100);
+            studentData[mark.student_name].subjects[subjectName] = {
+              total: total,
+              status: mark.pass_status || 'Fail'
+            };
+            studentData[mark.student_name].totalMarks += total;
+            studentData[mark.student_name].subjectCount++;
+            
+            if (mark.pass_status === 'Pass') {
+              studentData[mark.student_name].passedSubjects++;
+            } else {
+              studentData[mark.student_name].failedSubjects++;
+            }
+          }
+        } catch (error) {
+          subjectDetails[subjectName] = { config: null, hasData: false };
+        }
+      }
+      
+      // Filter active students and calculate rankings
+      const activeStudentNames = new Set();
+      try {
+        const activeStudentsResult = await pool.query(
+          `SELECT student_name FROM classes_schema."${actualClassName}" WHERE is_active = TRUE OR is_active IS NULL`
+        );
+        activeStudentsResult.rows.forEach(row => activeStudentNames.add(row.student_name));
+      } catch (error) {
+        Object.keys(studentData).forEach(name => activeStudentNames.add(name));
+      }
+      
+      const rankings = Object.values(studentData)
+        .filter(student => activeStudentNames.has(student.studentName))
+        .map(student => ({
+          ...student,
+          average: student.subjectCount > 0 ? student.totalMarks / student.subjectCount : 0,
+          overallStatus: student.failedSubjects === 0 && student.subjectCount > 0 ? 'Pass' : 'Fail'
+        }));
+      
+      rankings.sort((a, b) => {
+        if (b.average !== a.average) return b.average - a.average;
+        return b.totalMarks - a.totalMarks;
+      });
+      
+      const hasAnyMarks = rankings.some(s => s.totalMarks > 0);
+      if (hasAnyMarks) {
+        rankings.forEach((student, index) => {
+          student.rank = index + 1;
+          const rank = student.rank;
+          let suffix = 'th';
+          if (rank % 10 === 1 && rank % 100 !== 11) suffix = 'st';
+          else if (rank % 10 === 2 && rank % 100 !== 12) suffix = 'nd';
+          else if (rank % 10 === 3 && rank % 100 !== 13) suffix = 'rd';
+          student.rankDisplay = `${rank}${suffix}`;
+        });
+      }
+      
+      terms.push({
+        termNumber: termNum,
+        rankings,
+        subjects,
+        subjectDetails,
+        summary: {
+          totalStudents: rankings.length,
+          totalSubjects: subjects.length,
+          averageClassScore: rankings.length > 0 ? 
+            rankings.reduce((sum, s) => sum + s.average, 0) / rankings.length : 0,
+          passRate: rankings.length > 0 ? 
+            (rankings.filter(s => s.overallStatus === 'Pass').length / rankings.length) * 100 : 0
+        }
+      });
+    }
+    
+    res.json({
+      className,
+      termCount,
+      terms,
+      allSubjects: subjects
+    });
+  } catch (error) {
+    console.error('Error calculating full ranking:', error);
+    res.status(500).json({ error: 'Failed to calculate full ranking', details: error.message });
   }
 });
 
@@ -1584,7 +1759,7 @@ router.get('/student-marks/:schoolId/:className', async (req, res) => {
     const subjectsResult = await pool.query(`
       SELECT subject_name 
       FROM subjects_of_school_schema.subject_class_mappings 
-      WHERE class_name = $1
+      WHERE LOWER(class_name) = LOWER($1)
     `, [className]);
     
     const marks = [];
@@ -1655,12 +1830,24 @@ router.post('/sync-class-students/:className', async (req, res) => {
   try {
     await client.query('BEGIN');
     
+    // Resolve actual class name (case-insensitive)
+    const classResult = await client.query(
+      `SELECT table_name FROM information_schema.tables 
+       WHERE table_schema = 'classes_schema' AND LOWER(table_name) = LOWER($1)`,
+      [className]
+    );
+    if (classResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: `Class ${className} not found` });
+    }
+    const actualClassName = classResult.rows[0].table_name;
+    
     // Check if is_active column exists
-    const whereClause = await getActiveStudentsWhereClause(client, className);
+    const whereClause = await getActiveStudentsWhereClause(client, actualClassName);
     
     // Get all active students from the class
     const activeStudentsResult = await client.query(
-      `SELECT student_name, age, gender FROM classes_schema."${className}" 
+      `SELECT student_name, age, gender FROM classes_schema."${actualClassName}" 
        ${whereClause}`
     );
     const activeStudents = activeStudentsResult.rows;
@@ -1669,7 +1856,7 @@ router.post('/sync-class-students/:className', async (req, res) => {
     // Get all subjects mapped to this class
     const subjectMappingsResult = await client.query(
       `SELECT subject_name FROM subjects_of_school_schema.subject_class_mappings 
-       WHERE class_name = $1`,
+       WHERE LOWER(class_name) = LOWER($1)`,
       [className]
     );
     

@@ -13,7 +13,7 @@ const CollapsibleCard = ({
   const { theme } = useApp();
   
   const iconStyle = {
-    background: `linear-gradient(135deg, ${theme?.primaryColor || '#e67e22'} 0%, ${theme?.secondaryColor || '#d35400'} 100%)`
+    background: `linear-gradient(135deg, ${theme?.primaryColor || '#7c3aed'} 0%, ${theme?.secondaryColor || '#8b5cf6'} 100%)`
   };
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [contentHeight, setContentHeight] = useState(defaultExpanded ? 'auto' : 0);

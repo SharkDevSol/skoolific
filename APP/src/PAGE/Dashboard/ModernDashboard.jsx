@@ -14,9 +14,10 @@ import {
   RefreshCw, ArrowUpRight, ArrowDownRight, Activity,
   CheckCircle, XCircle, AlertCircle, FileText, MessageSquare,
   Award, Target, BarChart3, PieChart as PieChartIcon, TrendingDown as TrendingDownIcon,
-  UserPlus, DollarSign as DollarSignIcon, Package, Wrench, Briefcase
+  UserPlus, DollarSign as DollarSignIcon, Package, Wrench, Briefcase, Banknote
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getCurrentEthiopianMonth } from '../../utils/ethiopianCalendar';
 
 const ModernDashboard = () => {
   const { theme, t } = useApp();
@@ -54,6 +55,7 @@ const ModernDashboard = () => {
   const [staffByType, setStaffByType] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [monthlyPayments, setMonthlyPayments] = useState({ summary: null, classes: [] });
 
   const COLORS = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#30cfd0', '#a8edea'];
 
@@ -149,6 +151,30 @@ const ModernDashboard = () => {
           return { data: {} };
         })
       ]);
+
+      // Monthly payment overview (per-class breakdown, in Birr)
+      const ethMonth = getCurrentEthiopianMonth()?.month || 1;
+      const monthlyRes = await api
+        .get(`/finance/monthly-payments-view/overview?currentMonth=${ethMonth}`)
+        .catch((err) => {
+          console.error('Monthly payment overview error:', err.response?.status, err.response?.data?.error);
+          return { data: { summary: null, classes: [] } };
+        });
+      const monthlyData = monthlyRes.data || { summary: null, classes: [] };
+      setMonthlyPayments({
+        summary: monthlyData.summary || null,
+        classes: (monthlyData.classes || []).map((cls) => ({
+          className: cls.className,
+          monthlyFee: Number(cls.monthlyFee) || 0,
+          totalStudents: cls.totalStudents || 0,
+          payingStudents: cls.payingStudents || 0,
+          totalPaid: Number(cls.totalPaid) || 0,
+          totalPending: Number(cls.totalPending) || 0,
+          unlockedTotalPaid: Number(cls.unlockedTotalPaid) || 0,
+          unlockedTotalPending: Number(cls.unlockedTotalPending) || 0,
+          totalInvoices: cls.totalInvoices || 0
+        }))
+      });
 
       const data = dashboardRes.data;
       const basicStats = data.basic || {};
@@ -491,13 +517,13 @@ const ModernDashboard = () => {
           onClick={() => navigate('/mark-list-view')}
         />
         <StatCard
-          icon={DollarSign}
+          icon={Banknote}
           title="Revenue"
           value={`${(stats.revenue.collected / 1000).toFixed(0)}K Birr`}
           subtitle={`${(stats.revenue.pending / 1000).toFixed(0)}K Pending`}
           trend={stats.revenue.trend}
           color="#8B5CF6"
-          onClick={() => navigate('/finance')}
+          onClick={() => navigate('/finance/monthly-payments')}
         />
         <StatCard
           icon={BookOpen}
@@ -615,19 +641,75 @@ const ModernDashboard = () => {
           transition={{ delay: 0.3 }}
         >
           <div className={styles.chartHeader}>
-            <h3><DollarSign size={20} /> Revenue Overview</h3>
+            <h3><Banknote size={20} /> Revenue Overview (Birr)</h3>
           </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis dataKey="month" stroke="#6B7280" />
-              <YAxis stroke="#6B7280" />
-              <Tooltip />
+              <YAxis stroke="#6B7280" tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+              <Tooltip formatter={(value) => `${Number(value).toLocaleString()} Birr`} />
               <Legend />
               <Bar dataKey="collected" fill="#10B981" radius={[8, 8, 0, 0]} />
               <Bar dataKey="pending" fill="#F59E0B" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </motion.div>
+
+        {/* Monthly Payment Report */}
+        <motion.div
+          className={styles.chartCard}
+          onClick={() => navigate('/finance/monthly-payments')}
+          whileHover={{ y: -4 }}
+          style={{ cursor: 'pointer' }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
+          <div className={styles.chartHeader}>
+            <h3><Banknote size={20} /> Monthly Payment Report (Birr)</h3>
+            {monthlyPayments.summary && (
+              <span className={styles.reportSub}>
+                {monthlyPayments.summary.totalClasses || 0} classes •{' '}
+                {(monthlyPayments.summary.unlockedTotalPaid || 0).toLocaleString()} Birr collected •{' '}
+                {(monthlyPayments.summary.unlockedTotalPending || 0).toLocaleString()} Birr pending
+              </span>
+            )}
+          </div>
+          {monthlyPayments.classes.length > 0 ? (
+            <div className={styles.tableContainer}>
+              <table className={styles.dataTable}>
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Students</th>
+                    <th>Monthly Fee</th>
+                    <th>Collected</th>
+                    <th>Pending</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyPayments.classes.map((cls, index) => (
+                    <tr key={index}>
+                      <td><strong>{cls.className}</strong></td>
+                      <td>{cls.payingStudents}</td>
+                      <td>{Number(cls.monthlyFee).toLocaleString()} Birr</td>
+                      <td style={{ color: '#10B981' }}>
+                        {Number(cls.unlockedTotalPaid || cls.totalPaid || 0).toLocaleString()} Birr
+                      </td>
+                      <td style={{ color: '#F59E0B' }}>
+                        {Number(cls.unlockedTotalPending || cls.totalPending || 0).toLocaleString()} Birr
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className={styles.emptyMessage}>
+              No monthly payment data available yet. Generate invoices from Payment Settings.
+            </p>
+          )}
         </motion.div>
 
         {/* Gender Distribution */}

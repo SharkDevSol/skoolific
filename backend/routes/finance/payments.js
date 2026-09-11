@@ -78,7 +78,7 @@ router.get('/student/:studentId', authenticateWithBranch, async (req, res) => {
 // Record payment
 router.post('/', authenticateWithBranch, async (req, res) => {
   try {
-    const { studentId, amount, paymentMethod, referenceNumber, invoiceId, campusId } = req.body;
+    const { studentId, amount, paymentMethod, referenceNumber, invoiceId, campusId, registrationFeeType } = req.body;
     
     const result = await prisma.$transaction(async (tx) => {
       // Get invoice
@@ -90,7 +90,32 @@ router.post('/', authenticateWithBranch, async (req, res) => {
         throw new Error('Invoice not found');
       }
       
-      const balanceAmount = parseFloat(invoice.netAmount) - parseFloat(invoice.paidAmount);
+      // If registration fee type is specified, adjust invoice netAmount
+      let adjustedInvoice = invoice;
+      if (registrationFeeType === 'old') {
+        const meta = invoice.metadata || {};
+        const oldReg = parseFloat(meta.oldRegistrationFee) || 0;
+        const newReg = parseFloat(meta.newRegistrationFee) || 0;
+        if (newReg > oldReg) {
+          const reduction = newReg - oldReg;
+          const newNetAmount = parseFloat(invoice.netAmount) - reduction;
+          adjustedInvoice = await tx.invoice.update({
+            where: { id: invoiceId },
+            data: {
+              netAmount: newNetAmount,
+              metadata: { ...meta, registrationFeeApplied: 'old' }
+            }
+          });
+        }
+      } else if (registrationFeeType === 'new') {
+        const meta = invoice.metadata || {};
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: { metadata: { ...meta, registrationFeeApplied: 'new' } }
+        });
+      }
+      
+      const balanceAmount = parseFloat(adjustedInvoice.netAmount) - parseFloat(adjustedInvoice.paidAmount);
       
       if (parseFloat(amount) > balanceAmount) {
         throw new Error('Payment amount exceeds invoice balance');

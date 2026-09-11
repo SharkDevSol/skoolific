@@ -2,13 +2,23 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
 const multer = require("multer");
+const { branchSafeUpload } = require('../middleware/branchContextMiddleware');
 const path = require("path");
 const fs = require("fs");
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
 
-// Configure multer for file uploads
+// Configure multer for file uploads - use diskStorage with timestamp names + extensions
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "Uploads/"),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, uniqueSuffix + ext);
+  }
+});
+
 const upload = multer({
-  dest: "Uploads/",
+  storage,
   fileFilter: (req, file, cb) => {
     const allowedTypes = ["image/jpeg", "image/png", "video/mp4", "application/pdf"];
     if (allowedTypes.includes(file.mimetype)) {
@@ -53,6 +63,54 @@ router.get("/classes", async (req, res) => {
   } catch (error) {
     console.error("Error fetching classes:", error);
     res.status(500).json({ error: "Failed to fetch classes", details: error.message });
+  }
+});
+
+// Check whether a student machine ID is already in use (globally, across all classes)
+router.get("/check-machine-id/:smachineId", async (req, res) => {
+  const smachineId = String(req.params.smachineId || '').trim();
+  if (!smachineId) {
+    return res.json({ exists: false });
+  }
+  try {
+    // 1) global_machine_ids tracker (fastest / authoritative)
+    const g = await pool.query(
+      `SELECT student_name, class_name FROM school_schema_points.global_machine_ids WHERE smachine_id = $1 LIMIT 1`,
+      [smachineId]
+    );
+    if (g.rows.length > 0) {
+      return res.json({ exists: true, student_name: g.rows[0].student_name, class_name: g.rows[0].class_name });
+    }
+
+    // 2) Fallback: scan class tables
+    const tables = (await pool.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'classes_schema'`
+    )).rows.map(r => r.table_name);
+    let smachineColExists = false;
+    for (const t of tables) {
+      const col = (await pool.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema='classes_schema' AND table_name=$1 AND column_name='smachine_id'`,
+        [t]
+      )).rows.length > 0;
+      if (!col) continue;
+      smachineColExists = true;
+      const r = await pool.query(
+        `SELECT student_name FROM classes_schema."${t}" WHERE smachine_id::text = $1 LIMIT 1`,
+        [smachineId]
+      );
+      if (r.rows.length > 0) {
+        return res.json({ exists: true, student_name: r.rows[0].student_name, class_name: t });
+      }
+    }
+    // no smachine_id column anywhere => can't be duplicate
+    if (!smachineColExists) {
+      return res.json({ exists: false });
+    }
+    return res.json({ exists: false });
+  } catch (error) {
+    console.error("Error checking machine id:", error.message);
+    // Don't block registration on a check failure — return exists:false
+    return res.json({ exists: false });
   }
 });
 
@@ -148,7 +206,7 @@ router.get("/student/:className/:schoolId/:classId", async (req, res) => {
 });
 
 // Update student data with file upload support
-router.put("/student/:className/:schoolId/:classId", upload.single("image_student"), async (req, res) => {
+router.put("/student/:className/:schoolId/:classId", ...branchSafeUpload(upload.single("image_student")), async (req, res) => {
   const { className, schoolId, classId } = req.params;
   
   console.log('=== UPDATE STUDENT REQUEST ===');
@@ -178,7 +236,7 @@ router.put("/student/:className/:schoolId/:classId", upload.single("image_studen
     // Prepare update fields
     const fields = { ...updates };
     if (file) {
-      fields.image_student = file.filename;
+      fields.image_student = `/Uploads/${file.filename}`;
     }
 
     // Remove school_id and class_id from updates to avoid modifying primary keys
@@ -235,6 +293,212 @@ router.put("/student/:className/:schoolId/:classId", upload.single("image_studen
 
     if (Object.keys(fields).length === 0) {
       return res.status(400).json({ error: "No fields provided to update" });
+    }
+
+    // === CLASS TRANSFER ===
+    // If the student's class was changed, move the student to the new class table
+    const requestedClass = (updates.class || '').toString().trim();
+    if (requestedClass && requestedClass !== className) {
+      // Validate target class table
+      if (!/^[a-zA-Z0-9_]+$/.test(requestedClass)) {
+        return res.status(400).json({ error: 'Invalid class name provided.' });
+      }
+      const tableExists = await pool.query(
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'classes_schema' AND table_name = $1)`,
+        [requestedClass]
+      );
+      if (!tableExists.rows[0].exists) {
+        return res.status(400).json({ error: `Class "${requestedClass}" does not exist` });
+      }
+
+      // Get the current student record
+      const current = await pool.query(
+        `SELECT * FROM classes_schema."${className}" WHERE school_id = $1 AND class_id = $2`,
+        [schoolId, classId]
+      );
+      if (current.rows.length === 0) {
+        return res.status(404).json({ error: 'Student not found' });
+      }
+      const studentRow = current.rows[0];
+
+      // Merge current data with updates
+      const merged = { ...studentRow, ...updates };
+      delete merged.id;
+      if (file) merged.image_student = `/Uploads/${file.filename}`;
+
+      // Assign new class_id in the target class
+      const newIdResult = await pool.query(
+        `SELECT COALESCE(MAX(class_id), 0) + 1 AS new_id FROM classes_schema."${requestedClass}" WHERE school_id = $1`,
+        [schoolId]
+      );
+      const newClassId = newIdResult.rows[0].new_id;
+      merged.class = requestedClass;
+      merged.class_id = newClassId;
+      merged.school_id = schoolId;
+
+      // Build INSERT
+      const insertCols = Object.keys(merged);
+      const insertValues = insertCols.map((key) => {
+        const value = merged[key];
+        if (value === null || value === undefined) return null;
+        if (key === 'age') return parseInt(value, 10);
+        return value.toString();
+      });
+      const placeholders = insertCols.map((_, i) => `$${i + 1}`).join(', ');
+      const quotedCols = insertCols.map(c => `"${c}"`).join(', ');
+
+      await pool.query(
+        `INSERT INTO classes_schema."${requestedClass}" (${quotedCols}) VALUES (${placeholders})`,
+        insertValues
+      );
+
+      // Remove from the old class table
+      await pool.query(
+        `DELETE FROM classes_schema."${className}" WHERE school_id = $1 AND class_id = $2`,
+        [schoolId, classId]
+      );
+
+      // Sync finance records: re-point invoices to the new student id / fee structure,
+      // or generate invoices like a new registration (NO SMS is sent on transfer)
+      try {
+        const { getBranchPrisma } = require('../services/BranchPrismaService');
+        const prisma = getBranchPrisma();
+
+        const schoolIdPadded = String(schoolId).padStart(4, '0');
+        const oldClassIdPadded = String(classId).padStart(12, '0');
+        const newClassIdPadded = String(newClassId).padStart(12, '0');
+        const oldUuid = `00000000-0000-0000-${schoolIdPadded}-${oldClassIdPadded}`;
+        const newUuid = `00000000-0000-0000-${schoolIdPadded}-${newClassIdPadded}`;
+
+        // Find the target class fee structure
+        const newFeeStructure = await prisma.feeStructure.findFirst({
+          where: { gradeLevel: requestedClass, isActive: true },
+          include: { items: true }
+        });
+
+        if (newFeeStructure) {
+          const newMonthlyAmount = newFeeStructure.items.length > 0 ? parseFloat(newFeeStructure.items[0].amount) : null;
+
+          // Parse the target class registration fees from the fee structure description
+          let newRegFee = 0;
+          let oldRegFee = 0;
+          try {
+            let desc = newFeeStructure.description || '{}';
+            desc = desc.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+            const monthsData = JSON.parse(desc);
+            newRegFee = parseFloat(monthsData.newRegistrationFee) || 0;
+            oldRegFee = parseFloat(monthsData.oldRegistrationFee) || 0;
+          } catch (e) { /* no reg fees configured */ }
+
+          // Fetch existing invoices for the old student id
+          const existingInvoices = await prisma.invoice.findMany({
+            where: { studentId: oldUuid },
+            include: { items: true }
+          });
+
+          if (existingInvoices.length > 0 && newMonthlyAmount !== null) {
+            // Re-point AND recalculate amounts at the new class's monthly fee AND registration fee
+            // Fee type follows the student's old/new registration type
+            const studentFeeType = (merged.old_or_new && String(merged.old_or_new).toLowerCase() === 'old') ? 'old' : 'new';
+            const targetRegFee = (studentFeeType === 'old' && oldRegFee > 0) ? oldRegFee : newRegFee;
+
+            for (const inv of existingInvoices) {
+              const monthNumber = inv.metadata?.monthNumber || 0;
+              const isFirstMonth = (inv.metadata?.monthIndex === 1) || (monthNumber === 1);
+              const monthlyItem = (inv.items || []).find(it =>
+                it.feeCategory === 'TUITION' && !(it.description || '').toLowerCase().includes('registration')
+              );
+              const regItem = (inv.items || []).find(it =>
+                it.feeCategory === 'TUITION' && (it.description || '').toLowerCase().includes('registration')
+              );
+
+              // Registration fee: align with the target class's fee for the student's type (only for the first month)
+              let regFee = parseFloat(inv.metadata?.registrationFee || 0);
+              const regItemChanged = isFirstMonth && regItem && targetRegFee > 0 && regFee !== targetRegFee;
+              if (regItemChanged) regFee = targetRegFee;
+
+              const discount = parseFloat(inv.discountAmount || 0);
+              const lateFee = parseFloat(inv.lateFeeAmount || 0);
+              const paid = parseFloat(inv.paidAmount || 0);
+              const newTotal = newMonthlyAmount + (isFirstMonth ? regFee : 0);
+              const newNet = newTotal - discount + lateFee;
+
+              let newStatus = inv.status;
+              if (paid >= newNet) newStatus = 'PAID';
+              else if (paid > 0 && inv.status === 'PAID') newStatus = 'PARTIALLY_PAID';
+
+              const itemUpdates = [];
+              if (monthlyItem) {
+                itemUpdates.push({ where: { id: monthlyItem.id }, data: { amount: newMonthlyAmount } });
+              }
+              if (regItemChanged) {
+                itemUpdates.push({ where: { id: regItem.id }, data: { amount: targetRegFee } });
+              }
+
+              await prisma.invoice.update({
+                where: { id: inv.id },
+                data: {
+                  studentId: newUuid,
+                  feeStructureId: newFeeStructure.id,
+                  totalAmount: newTotal,
+                  netAmount: newNet,
+                  status: newStatus,
+                  ...(regItemChanged ? {
+                    metadata: {
+                      ...(inv.metadata || {}),
+                      registrationFee: targetRegFee,
+                      newRegistrationFee: newRegFee || 0,
+                      oldRegistrationFee: oldRegFee || 0,
+                      studentType: studentFeeType
+                    }
+                  } : {}),
+                  ...(itemUpdates.length > 0 ? { items: { update: itemUpdates } } : {})
+                }
+              });
+            }
+            console.log(`💳 Transfer invoice sync: re-pointed + recalculated ${existingInvoices.length} invoice(s) at ${newMonthlyAmount} Birr/month${targetRegFee ? `, reg fee ${targetRegFee} (${studentFeeType})` : ''}`);
+          } else if (existingInvoices.length === 0) {
+            // No invoices at all — generate like a new registration (no SMS)
+            const { generateStudentInvoices } = require('../services/studentInvoiceService');
+            const studentFeeType = (merged.old_or_new && String(merged.old_or_new).toLowerCase() === 'old') ? 'old' : 'new';
+            const result = await generateStudentInvoices({ studentUuid: newUuid, className: requestedClass, skipRegistrationFee: true, regFeeType: studentFeeType });
+            console.log(`💳 Transfer invoice sync: generated ${result.generated} new invoice(s) for ${requestedClass}`);
+          } else {
+            // New fee structure has no items — just re-point without amount changes
+            await prisma.invoice.updateMany({
+              where: { studentId: oldUuid },
+              data: { studentId: newUuid, feeStructureId: newFeeStructure.id }
+            });
+            console.log(`💳 Transfer invoice sync: re-pointed ${existingInvoices.length} invoice(s) (no monthly amount on new fee structure)`);
+          }
+        } else {
+          console.log(`⚠️ Transfer invoice sync: no active fee structure for class "${requestedClass}" — skipped`);
+        }
+      } catch (err) {
+        console.log('Note: Transfer invoice sync skipped:', err.message);
+      }
+
+      // Update global machine ID tracker
+      if (merged.smachine_id) {
+        try {
+          await pool.query(`
+            UPDATE school_schema_points.global_machine_ids 
+            SET class_name = $1, class_id = $2, student_name = $3, updated_at = CURRENT_TIMESTAMP
+            WHERE school_id = $4 AND smachine_id = $5
+          `, [requestedClass, newClassId, merged.student_name, schoolId, merged.smachine_id]);
+        } catch (err) {
+          console.log('Note: Global machine ID tracker not available:', err.message);
+        }
+      }
+
+      // Delete old image file if replaced
+      if (file && updates.image_student && updates.image_student !== file.filename) {
+        const oldFilePath = path.join(uploadDir, updates.image_student);
+        if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
+      }
+
+      console.log(`✅ Student ${merged.student_name} transferred from ${className} to ${requestedClass} (new class_id: ${newClassId})`);
+      return res.json({ ...merged, transferred: true, fromClass: className, toClass: requestedClass });
     }
 
     // Build query
@@ -400,7 +664,7 @@ router.put('/toggle-active/:className/:schoolId/:classId', async (req, res) => {
 // TOGGLE FREE STUDENT (MARK AS LEARNING FOR FREE / SCHOLARSHIP)
 router.put('/toggle-free/:className/:schoolId/:classId', async (req, res) => {
   const { className, schoolId, classId } = req.params;
-  const { is_free, exemption_type, exemption_reason } = req.body;
+  const { is_free, exemption_type, exemption_reason, registration_fee_type } = req.body;
   
   if (typeof is_free !== 'boolean') {
     return res.status(400).json({ error: 'is_free must be a boolean value' });
@@ -412,9 +676,15 @@ router.put('/toggle-free/:className/:schoolId/:classId', async (req, res) => {
     return res.status(400).json({ error: 'Invalid class name provided' });
   }
   
-  // If marking as free, require exemption type
+  // If marking as free, require exemption type AND a registration fee type.
+  // Free students still pay a one-time Registration Fee (Old or New) — the
+  // registration_fee_type tells the invoice generator which fee to charge.
   if (is_free && !exemption_type) {
     return res.status(400).json({ error: 'exemption_type is required when marking student as free' });
+  }
+  const regFeeType = registration_fee_type === 'old' ? 'old' : registration_fee_type === 'new' ? 'new' : 'new';
+  if (is_free && registration_fee_type !== 'old' && registration_fee_type !== 'new') {
+    // default to 'new' if not explicitly provided (backward compatible)
   }
   
   try {
@@ -422,7 +692,7 @@ router.put('/toggle-free/:className/:schoolId/:classId', async (req, res) => {
     const columnCheck = await pool.query(
       `SELECT column_name FROM information_schema.columns 
        WHERE table_schema = 'classes_schema' AND table_name = $1 
-       AND column_name IN ('is_free', 'exemption_type', 'exemption_reason')`,
+       AND column_name IN ('is_free', 'exemption_type', 'exemption_reason', 'registration_fee_type')`,
       [className]
     );
     
@@ -451,14 +721,22 @@ router.put('/toggle-free/:className/:schoolId/:classId', async (req, res) => {
       );
       console.log(`Added exemption_reason column to classes_schema.${className}`);
     }
+
+    if (!existingColumns.includes('registration_fee_type')) {
+      await pool.query(
+        `ALTER TABLE classes_schema."${className}" 
+         ADD COLUMN registration_fee_type VARCHAR(10) DEFAULT NULL`
+      );
+      console.log(`Added registration_fee_type column to classes_schema.${className}`);
+    }
     
     // Update the student
     const updateResult = await pool.query(
       `UPDATE classes_schema."${className}" 
-       SET is_free = $1, exemption_type = $2, exemption_reason = $3
-       WHERE school_id = $4 AND class_id = $5 
+       SET is_free = $1, exemption_type = $2, exemption_reason = $3, registration_fee_type = $4
+       WHERE school_id = $5 AND class_id = $6 
        RETURNING *`,
-      [is_free, is_free ? exemption_type : null, is_free ? exemption_reason : null, schoolId, classId]
+      [is_free, is_free ? exemption_type : null, is_free ? exemption_reason : null, is_free ? regFeeType : null, schoolId, classId]
     );
     
     if (updateResult.rowCount === 0) {

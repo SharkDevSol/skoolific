@@ -100,7 +100,7 @@ const PostCard = ({ post, onLike }) => {
       <div className={styles.mediaContainer} onDoubleClick={handleDoubleTap}>
         <div className={styles.mediaSlider} style={{ transform: `translateX(-${imageIndex * 100}%)` }}>
           {mediaItems.map((m, idx) => {
-            const mediaUrl = `https://v2.skoolific.com/Uploads/posts/${m.filename}`;
+            const mediaUrl = `/Uploads/posts/${m.filename}`;
             
             if (m.mimetype?.startsWith('image/')) {
               return (
@@ -164,7 +164,7 @@ const PostCard = ({ post, onLike }) => {
     return (
       <div className={styles.attachments}>
         {files.map((m, idx) => {
-          const mediaUrl = `https://v2.skoolific.com/Uploads/posts/${m.filename}`;
+          const mediaUrl = `/Uploads/posts/${m.filename}`;
           return (
             <a key={idx} href={mediaUrl} download className={styles.attachmentLink}>
               <FiDownload />
@@ -185,7 +185,7 @@ const PostCard = ({ post, onLike }) => {
         <div className={styles.authorInfo}>
           <div 
             className={styles.authorAvatar}
-            style={{ background: `linear-gradient(135deg, ${theme?.primaryColor || '#667eea'}, ${theme?.secondaryColor || '#764ba2'})` }}
+            style={{ background: `linear-gradient(135deg, ${theme?.primaryColor || '#7c3aed'}, ${theme?.secondaryColor || '#8b5cf6'})` }}
           >
             {post.author_image ? (
               <img src={post.author_image} alt={post.author_name} />

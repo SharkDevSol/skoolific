@@ -32,7 +32,7 @@ If you don't have it: https://winscp.net/eng/download.php
    - **Host name**: `76.13.48.245`
    - **Port**: 22
    - **User name**: `root`
-   - **Password**: `V@gSWi)Po712@TaWR3r9`
+   - **Password**: `[REDACTED-PASSWORD]`
 3. Click "Login"
 4. Click "Yes" if it asks about host key
 
@@ -61,7 +61,7 @@ If you don't have it: https://filezilla-project.org/download.php?type=client
 2. Enter at the top:
    - **Host**: `sftp://76.13.48.245`
    - **Username**: `root`
-   - **Password**: `V@gSWi)Po712@TaWR3r9`
+   - **Password**: `[REDACTED-PASSWORD]`
    - **Port**: 22
 3. Click "Quickconnect"
 4. Click "OK" if it asks about unknown host key
@@ -87,17 +87,17 @@ ssh root@76.13.48.245 "systemctl reload nginx"
 ### Step 1: Accept Host Key First
 Open PowerShell and run:
 ```powershell
-echo y | plink -pw "V@gSWi)Po712@TaWR3r9" root@76.13.48.245 "exit"
+echo y | plink -pw "[REDACTED-PASSWORD]" root@76.13.48.245 "exit"
 ```
 
 ### Step 2: Upload Entire dist Folder
 ```powershell
-pscp -r -pw "V@gSWi)Po712@TaWR3r9" APP\dist\* root@76.13.48.245:/var/www/skoolific/iqrab3/APP/dist/
+pscp -r -pw "[REDACTED-PASSWORD]" APP\dist\* root@76.13.48.245:/var/www/skoolific/iqrab3/APP/dist/
 ```
 
 ### Step 3: Reload Nginx
 ```powershell
-plink -pw "V@gSWi)Po712@TaWR3r9" root@76.13.48.245 "systemctl reload nginx"
+plink -pw "[REDACTED-PASSWORD]" root@76.13.48.245 "systemctl reload nginx"
 ```
 
 ---
@@ -112,14 +112,14 @@ Compress-Archive -Path APP\dist\* -DestinationPath dist.zip -Force
 
 ### Step 2: Upload zip
 ```powershell
-pscp -pw "V@gSWi)Po712@TaWR3r9" dist.zip root@76.13.48.245:/tmp/
+pscp -pw "[REDACTED-PASSWORD]" dist.zip root@76.13.48.245:/tmp/
 ```
 
 ### Step 3: SSH and extract
 ```powershell
 ssh root@76.13.48.245
 ```
-Password: `V@gSWi)Po712@TaWR3r9`
+Password: `[REDACTED-PASSWORD]`
 
 Then run:
 ```bash

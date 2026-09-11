@@ -1,9 +1,10 @@
 // ListGuardian.jsx - Guardian List with Student Associations
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FiUsers, FiSearch, FiEye, FiEyeOff, FiX, FiRefreshCw, FiLock, FiCopy,
+  FiUsers, FiSearch, FiEye, FiEyeOff, FiX, FiRefreshCw, FiLock, FiCopy, FiDownload,
   FiPhone, FiMail, FiUser, FiGrid, FiList, FiChevronLeft, FiChevronRight
 } from 'react-icons/fi';
 import { useApp } from '../../../context/AppContext';
@@ -52,6 +53,25 @@ const ListGuardian = () => {
     });
     setFilteredGuardians(filtered);
     setCurrentPage(1);
+  };
+
+  const handleExportExcel = () => {
+    if (filteredGuardians.length === 0) {
+      alert('No guardians to export');
+      return;
+    }
+    const rows = filteredGuardians.map(guardian => ({
+      'Guardian Name': guardian.guardian_name || '',
+      'Phone': guardian.guardian_phone || '',
+      'Email': guardian.guardian_email || '',
+      'Relation': guardian.guardian_relation || '',
+      'Username': guardian.guardian_username || '',
+      'Students': (guardian.students || []).map(s => s.student_name).join(', ')
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Guardians');
+    XLSX.writeFile(wb, `guardians_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
 
@@ -116,6 +136,9 @@ const ListGuardian = () => {
         </div>
         <button className={styles.refreshBtn} onClick={fetchGuardians}>
           <FiRefreshCw /> {t('refresh') || 'Refresh'}
+        </button>
+        <button className={styles.refreshBtn} onClick={handleExportExcel}>
+          <FiDownload /> Download Excel
         </button>
       </motion.div>
 

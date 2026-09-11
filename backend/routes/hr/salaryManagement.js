@@ -55,8 +55,9 @@ router.get('/staff', authenticateToken, async (req, res) => {
       return res.json({ success: true, data: [], count: 0, message: 'Staff type required' });
     }
     
+    const port = process.env.PORT || 5052;
     // Get all classes for this staff type
-    const classesResponse = await axios.get(`http://localhost:5000/api/staff/classes?staffType=${encodeURIComponent(staffType)}`);
+    const classesResponse = await axios.get(`http://localhost:${port}/api/staff/classes?staffType=${encodeURIComponent(staffType)}`);
     const classes = classesResponse.data;
     
     console.log(`📝 Found ${classes.length} classes for ${staffType}`);
@@ -70,7 +71,7 @@ router.get('/staff', authenticateToken, async (req, res) => {
     // Fetch staff from each class
     for (const className of classes) {
       try {
-        const dataResponse = await axios.get(`http://localhost:5000/api/staff/data/${staffType}/${className}`);
+        const dataResponse = await axios.get(`http://localhost:${port}/api/staff/data/${staffType}/${className}`);
         const staffData = dataResponse.data.data || [];
         
         console.log(`   Found ${staffData.length} staff in ${className}`);

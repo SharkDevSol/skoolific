@@ -8,7 +8,7 @@ const { getEndpointPath, API_ENDPOINTS } = require('../../config/api.config');
 router.get('/summary', authenticateToken, async (req, res) => {
   try {
     // Get total staff count
-    const staffTypes = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff'];
+    const staffTypes = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff', 'staff_finance'];
     let totalStaff = 0;
 
     for (const schema of staffTypes) {

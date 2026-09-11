@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "809606061706",
+    "project_id": "iqra-parent",
+    "storage_bucket": "iqra-parent.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:809606061706:android:24061504b258cbe2c29773",
+        "android_client_info": {
+          "package_name": "com.skoolific.guardian"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBIwjWVDIox-ndetKN21IzseLgZ98gv7nk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

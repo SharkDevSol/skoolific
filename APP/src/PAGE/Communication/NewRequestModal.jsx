@@ -13,7 +13,7 @@ const NewRequestModal = ({ isOpen, onClose, onSubmit, recipientId, senderId }) =
     
     try {
       // Send request with sender ID
-      const res = await axios.post('https://v2.skoolific.com/api/chats/requests', { 
+      const res = await axios.post('/api/chats/requests', { 
         recipientId, 
         questions: qArray,
         senderId: senderId || 1 // Default to director if not provided

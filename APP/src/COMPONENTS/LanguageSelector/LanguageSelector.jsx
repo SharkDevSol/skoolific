@@ -37,6 +37,18 @@ const LanguageSelector = ({ variant = 'dropdown', showFlags = false, className =
       name: 'Arabic', 
       nativeName: 'العربية',
       flag: '🇸🇦'
+    },
+    { 
+      code: 'so', 
+      name: 'Somali', 
+      nativeName: 'Soomaali',
+      flag: '🇸🇴'
+    },
+    { 
+      code: 'om', 
+      name: 'Oromo', 
+      nativeName: 'Afaan Oromoo',
+      flag: '🇪🇹'
     }
   ];
   

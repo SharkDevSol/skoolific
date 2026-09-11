@@ -1,4 +1,5 @@
 import React, { forwardRef, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, X, Check } from 'lucide-react';
 import styles from './Select.module.css';
 
@@ -40,8 +41,30 @@ const Select = forwardRef(({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const selectRef = useRef(null);
+  const selectWrapperRef = useRef(null);
   const searchInputRef = useRef(null);
+
+  // Calculate dropdown position relative to viewport for portal rendering
+  useEffect(() => {
+    if (!isOpen || !selectWrapperRef.current) return;
+    const updatePos = () => {
+      const rect = selectWrapperRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+    updatePos();
+    window.addEventListener('scroll', updatePos, true);
+    window.addEventListener('resize', updatePos);
+    return () => {
+      window.removeEventListener('scroll', updatePos, true);
+      window.removeEventListener('resize', updatePos);
+    };
+  }, [isOpen]);
 
   // Normalize options to handle both flat and grouped structures
   const normalizedOptions = React.useMemo(() => {
@@ -236,7 +259,7 @@ const Select = forwardRef(({
         </label>
       )}
       
-      <div className={`${styles.selectWrapper} ${error ? styles.error : ''} ${disabled ? styles.disabled : ''}`}>
+      <div className={`${styles.selectWrapper} ${error ? styles.error : ''} ${disabled ? styles.disabled : ''}`} ref={selectWrapperRef}>
         <button
           type="button"
           id={inputId}
@@ -273,71 +296,82 @@ const Select = forwardRef(({
             />
           </div>
         </button>
-
-        {isOpen && (
-          <div className={styles.dropdown} role="presentation">
-            {searchable && (
-              <div className={styles.searchWrapper}>
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  className={styles.searchInput}
-                  placeholder="Search..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  aria-label="Search options"
-                />
-              </div>
-            )}
-            
-            <ul 
-              className={styles.optionsList} 
-              role="listbox"
-              aria-multiselectable={multiple ? 'true' : 'false'}
-              aria-label={label || 'Select options'}
-            >
-              {filteredOptions.length === 0 ? (
-                <li className={styles.noOptions} role="presentation">
-                  No options found
-                </li>
-              ) : (
-                filteredOptions.map((group, groupIndex) => (
-                  <React.Fragment key={groupIndex}>
-                    {group.group && (
-                      <li className={styles.groupLabel} role="presentation">
-                        {group.group}
-                      </li>
-                    )}
-                    {group.options.map((option, optionIndex) => {
-                      const flatIndex = flatOptions.findIndex(o => o.value === option.value);
-                      const isFocused = flatIndex === focusedIndex;
-                      const selected = isSelected(option);
-                      
-                      return (
-                        <li
-                          key={option.value}
-                          className={`${styles.option} ${selected ? styles.selected : ''} ${option.disabled ? styles.optionDisabled : ''} ${isFocused ? styles.focused : ''}`}
-                          onClick={() => handleSelect(option)}
-                          role="option"
-                          aria-selected={selected}
-                          aria-disabled={option.disabled}
-                        >
-                          {multiple && (
-                            <span className={styles.checkbox}>
-                              {selected && <Check size={16} aria-hidden="true" />}
-                            </span>
-                          )}
-                          <span className={styles.optionLabel}>{option.label}</span>
-                        </li>
-                      );
-                    })}
-                  </React.Fragment>
-                ))
-              )}
-            </ul>
-          </div>
-        )}
       </div>
+      
+      {/* Dropdown rendered via portal to avoid clipping by overflow:hidden parents */}
+      {isOpen && createPortal(
+        <div 
+          className={styles.dropdown} 
+          role="presentation"
+          style={{
+            position: 'fixed',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            zIndex: 99999,
+          }}
+        >
+          {searchable && (
+            <div className={styles.searchWrapper}>
+              <input
+                ref={searchInputRef}
+                type="text"
+                className={styles.searchInput}
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Search options"
+              />
+            </div>
+          )}
+          
+          <ul 
+            className={styles.optionsList} 
+            role="listbox"
+            aria-multiselectable={multiple ? 'true' : 'false'}
+            aria-label={label || 'Select options'}
+          >
+            {filteredOptions.length === 0 ? (
+              <li className={styles.noOptions} role="presentation">
+                No options found
+              </li>
+            ) : (
+              filteredOptions.map((group, groupIndex) => (
+                <React.Fragment key={groupIndex}>
+                  {group.group && (
+                    <li className={styles.groupLabel} role="presentation">
+                      {group.group}
+                    </li>
+                  )}
+                  {group.options.map((option, optionIndex) => {
+                    const flatIndex = flatOptions.findIndex(o => o.value === option.value);
+                    const isFocused = flatIndex === focusedIndex;
+                    const selected = isSelected(option);
+                    
+                    return (
+                      <li
+                        key={option.value}
+                        className={`${styles.option} ${selected ? styles.selected : ''} ${option.disabled ? styles.optionDisabled : ''} ${isFocused ? styles.focused : ''}`}
+                        onClick={() => handleSelect(option)}
+                        role="option"
+                        aria-selected={selected}
+                        aria-disabled={option.disabled}
+                      >
+                        {multiple && (
+                          <span className={styles.checkbox}>
+                            {selected && <Check size={16} aria-hidden="true" />}
+                          </span>
+                        )}
+                        <span className={styles.optionLabel}>{option.label}</span>
+                      </li>
+                    );
+                  })}
+                </React.Fragment>
+              ))
+            )}
+          </ul>
+        </div>
+      , document.body)}
       
       {error && (
         <span 

@@ -78,15 +78,16 @@ router.get('/staff/summary', async (req, res) => {
     const teachers = await countInSchema('staff_teachers');
     const administrative = await countInSchema('staff_administrative_staff');
     const supportive = await countInSchema('staff_supportive_staff');
-    const total = teachers + administrative + supportive;
+    const finance = await countInSchema('staff_finance');
+    const total = teachers + administrative + supportive + finance;
     
     res.json({ success: true, data: {
       total, male: 0, female: 0,
-      teachers, administrative, supportive,
+      teachers, administrative, supportive, finance,
       trend: 0
     }});
   } catch(e) {
-    res.json({ success: true, data: { total: 0, male: 0, female: 0, teachers: 0, administrative: 0, supportive: 0, trend: 0 }});
+    res.json({ success: true, data: { total: 0, male: 0, female: 0, teachers: 0, administrative: 0, supportive: 0, finance: 0, trend: 0 }});
   }
 });
 

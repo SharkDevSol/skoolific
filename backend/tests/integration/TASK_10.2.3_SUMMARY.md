@@ -102,7 +102,7 @@ The tests use the database credentials from `backend/.env`:
 ```env
 DB_NAME=skoolific
 DB_USER=postgres
-DB_PASSWORD=12345678
+DB_PASSWORD=[REDACTED-PASSWORD]
 DB_HOST=localhost
 DB_PORT=5432
 ```
@@ -119,7 +119,7 @@ npm start
 ### 3. JWT Secret
 The tests use the JWT_SECRET from the environment:
 ```env
-JWT_SECRET="GerZURN8DsVG7dkhrGfisCxP6UnDbD3RDB8vcJp2KSRFdBofcsqRiOoZU51f43"
+JWT_SECRET="[REDACTED-JWT-SECRET]"
 ```
 
 ## Running the Tests

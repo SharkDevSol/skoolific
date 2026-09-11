@@ -6,7 +6,7 @@ import {
 } from 'react-icons/fi';
 import styles from './DailyEvaluationForm.module.css';
 
-const API_BASE = `${import.meta.env.VITE_API_URL || '/api'}/evaluation-book`;
+const API_BASE = `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/evaluation-book`;
 
 const DailyEvaluationForm = () => {
   const { className } = useParams();

@@ -133,6 +133,7 @@ router.get('/', authenticateWithBranch, async (req, res) => {
   console.log('User:', req.user);
   
   try {
+    await initializeFeeManagementTable();
     const result = await pool.query(`
       SELECT 
         id,

@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import styles from '../Finance/PaymentManagement.module.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const DeviceStatus = () => {
   const [devices, setDevices] = useState([]);
+  const [serverPort, setServerPort] = useState(null);
+  const [branch, setBranch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [testResult, setTestResult] = useState(null);
@@ -22,12 +24,18 @@ const DeviceStatus = () => {
     try {
       const token = localStorage.getItem('authToken') || localStorage.getItem('token');
       const response = await axios.get(
-        `${API_URL}/hr/devices/status`,
+        `${API_URL}/api/hr/devices/status`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       
       if (response.data.success) {
         setDevices(response.data.devices);
+        if (response.data.serverPort) {
+          setServerPort(response.data.serverPort);
+        }
+        if (response.data.branch) {
+          setBranch(response.data.branch);
+        }
       }
       setLoading(false);
     } catch (error) {
@@ -44,7 +52,7 @@ const DeviceStatus = () => {
     try {
       const token = localStorage.getItem('authToken') || localStorage.getItem('token');
       const response = await axios.post(
-        `${API_URL}/hr/devices/test-log`,
+        `${API_URL}/api/hr/devices/test-log`,
         {
           machineId: '999',
           name: 'Test User',
@@ -119,7 +127,10 @@ const DeviceStatus = () => {
             {devices.length > 0 ? '✅ Running' : '❌ No Devices'}
           </div>
           <div style={{ fontSize: '13px', color: '#666' }}>
-            Port: 7788
+            Port: {serverPort || '—'}
+          </div>
+          <div style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>
+            Branch: {branch || '—'}
           </div>
         </div>
 
@@ -203,7 +214,7 @@ const DeviceStatus = () => {
                 <strong>Server IP:</strong> {window.location.hostname}
               </div>
               <div style={{ marginBottom: '8px' }}>
-                <strong>Server Port:</strong> 7788
+                <strong>Server Port:</strong> {serverPort || '—'}
               </div>
               <div>
                 <strong>Protocol:</strong> WebSocket
@@ -243,6 +254,9 @@ const DeviceStatus = () => {
                   </div>
                   <div style={{ fontSize: '13px', color: '#666' }}>
                     Serial: {device.serialNumber || 'Unknown'}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#666' }}>
+                    Branch: {device.branch || '—'}
                   </div>
                   {device.model && (
                     <div style={{ fontSize: '13px', color: '#666' }}>
@@ -330,7 +344,7 @@ const DeviceStatus = () => {
               <strong>Verify Device Configuration:</strong>
               <ul style={{ paddingLeft: '20px', marginTop: '4px' }}>
                 <li>Server IP: {window.location.hostname}</li>
-                <li>Server Port: 7788</li>
+                <li>Server Port: {serverPort || '—'}</li>
                 <li>Protocol: WebSocket (not HTTP)</li>
               </ul>
             </li>

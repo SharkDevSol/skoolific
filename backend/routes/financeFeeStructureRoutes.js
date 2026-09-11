@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { branchPrisma: prisma } = require('../services/BranchPrismaService');
 const cors = require('cors');
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
 
@@ -10,6 +9,7 @@ router.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) return callback(null, true);
+    if (origin.match(/^https?:\/\/[a-z0-9-]+\.skoolific\.com$/)) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -105,12 +105,13 @@ router.post('/', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS.F
       });
 
       if (!account) {
-        return res.status(404).json({
-          error: 'NOT_FOUND',
-          message: `Account not found for item ${i + 1}`,
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: `Account not found for item ${i + 1}. You used accountId: ${item.accountId}. Available INCOME accounts: run 'SELECT id, name FROM school_comms."Account" WHERE type = '\''INCOME'\'''`,
           details: {
             entityType: 'Account',
-            entityId: item.accountId
+            entityId: item.accountId,
+            availableAccounts: await prisma.account.findMany({ where: { type: 'INCOME' }, select: { id: true, name: true } })
           }
         });
       }
@@ -139,6 +140,12 @@ router.post('/', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS.F
       }
     }
 
+    // Sanitize description — decode HTML entities that may come from frontend
+    let cleanDescription = description || null;
+    if (cleanDescription && typeof cleanDescription === 'string') {
+      cleanDescription = cleanDescription.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    }
+
     // Create fee structure with items in a transaction
     const feeStructure = await prisma.$transaction(async (tx) => {
       // Create fee structure
@@ -150,7 +157,7 @@ router.post('/', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS.F
           gradeLevel: gradeLevel || null,
           campusId: campusId || null,
           studentCategory: studentCategory || null,
-          description: description || null, // Add description field
+          description: cleanDescription,
           isActive: true
         }
       });
@@ -192,6 +199,236 @@ router.post('/', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS.F
       return { ...structure, items: createdItems };
     });
 
+    // ---- Auto-generate invoices for existing students in this class ----
+    try {
+      if (gradeLevel) {
+        const pool = require('../config/db');
+        const className = gradeLevel;
+        const validTableName = /^[a-zA-Z0-9_]+$/.test(className);
+        
+        if (validTableName) {
+          // Check if the class table exists
+          const tableCheck = await pool.query(
+            'SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2',
+            ['classes_schema', className]
+          );
+          
+          if (tableCheck.rows.length > 0) {
+            // Get existing students from this class (incl. free/exemption flags)
+            const students = await pool.query(
+              `SELECT school_id, class_id, student_name, is_free, registration_fee_type FROM classes_schema."${className}" WHERE is_active != false OR is_active IS NULL`
+            );
+            
+            if (students.rows.length > 0) {
+              // Parse months data
+              let selectedMonths = [];
+              let oldRegistrationFee = 0;
+              let newRegistrationFee = 0;
+              try {
+                let desc = cleanDescription || '{}';
+                const monthsData = JSON.parse(desc);
+                selectedMonths = monthsData.months || [];
+                oldRegistrationFee = parseFloat(monthsData.oldRegistrationFee) || 0;
+                newRegistrationFee = parseFloat(monthsData.newRegistrationFee) || parseFloat(monthsData.registrationFee) || 0;
+              } catch (e) {
+                console.warn('Could not parse months data for auto-generation');
+              }
+              
+              if (selectedMonths.length > 0) {
+                selectedMonths.sort((a, b) => a - b);
+                
+                // Generate invoices for ALL months configured in payment settings
+                const monthsToGenerate = selectedMonths;
+                
+                const monthlyAmount = feeStructure.items?.[0]?.amount ? parseFloat(feeStructure.items[0].amount) : 0;
+                const accountId = feeStructure.items?.[0]?.accountId || '00000000-0000-0000-0000-000000000001';
+                const campusId = feeStructure.campusId || '00000000-0000-0000-0000-000000000001';
+                const { toEthiopian, toGregorian } = require('../utils/ethiopianCalendar');
+                const today = new Date();
+                const ethNow = toEthiopian(today);
+                const ethiopianYear = ethNow.year;
+                const gregYear = ethiopianYear + 7;
+                const pagumeDays = ((gregYear + 1) % 4 === 0 && ((gregYear + 1) % 100 !== 0 || (gregYear + 1) % 400 === 0)) ? 6 : 5;
+                const ethiopianMonthNames = [
+                  'Meskerem','Tikimt','Hidar','Tahsas','Tir','Yekatit',
+                  'Megabit','Miazia','Ginbot','Sene','Hamle','Nehase','Pagume'
+                ];
+                
+                console.log(`📅 Generating ALL months for existing students in "${className}": ${monthsToGenerate.join(', ')}`);
+                
+                let generatedCount = 0;
+                
+                for (const student of students.rows) {
+                  const schoolIdPadded = String(student.school_id).padStart(4, '0');
+                  const classIdPadded = String(student.class_id).padStart(12, '0');
+                  const studentUuid = `00000000-0000-0000-${schoolIdPadded}-${classIdPadded}`;
+                  
+                  // Check if student already has invoices for this fee structure
+                  const existingInvoices = await prisma.invoice.count({
+                    where: { studentId: studentUuid, feeStructureId: feeStructure.id }
+                  });
+                  
+                  if (existingInvoices > 0) continue; // Skip students with existing invoices
+
+                  // FREE STUDENTS: they don't pay tuition — only a one-time
+                  // Registration Fee. Generate a single reg-fee-only invoice, then move on.
+                  if (student.is_free === true) {
+                    const regFeeType = student.registration_fee_type === 'old' ? 'old' : 'new';
+                    const regFeeAmount = regFeeType === 'old' ? oldRegistrationFee : newRegistrationFee;
+
+                    if (regFeeAmount > 0) {
+                      const firstMonth = monthsToGenerate[0];
+                      const monthName = ethiopianMonthNames[firstMonth - 1] || `Month ${firstMonth}`;
+                      const lastDayOfMonth = firstMonth === 13 ? pagumeDays : 30;
+                      let dueDate = toGregorian(ethiopianYear, firstMonth, lastDayOfMonth);
+                      dueDate.setHours(12, 0, 0, 0);
+                      if (dueDate < today) {
+                        dueDate = new Date(today);
+                        dueDate.setHours(12, 0, 0, 0);
+                        dueDate.setDate(dueDate.getDate() + 10);
+                      }
+
+                      const invoiceNumber = `INV-${Date.now()}-${studentUuid.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}-REG`;
+                      const { generateUniqueInvoiceRefCode } = require('../utils/invoiceRefCode');
+                      const invoiceRefCode = await generateUniqueInvoiceRefCode(async (code) => {
+                        const existing = await prisma.invoice.findUnique({ where: { invoiceRefCode: code } });
+                        return !!existing;
+                      });
+
+                      await prisma.invoice.create({
+                        data: {
+                          invoiceNumber,
+                          invoiceRefCode,
+                          studentId: studentUuid,
+                          academicYearId: feeStructure.academicYearId || '00000000-0000-0000-0000-000000000001',
+                          feeStructureId: feeStructure.id,
+                          issueDate: new Date(),
+                          dueDate,
+                          totalAmount: regFeeAmount,
+                          discountAmount: 0,
+                          lateFeeAmount: 0,
+                          netAmount: regFeeAmount,
+                          paidAmount: 0,
+                          status: 'ISSUED',
+                          campusId,
+                          createdBy: '00000000-0000-0000-0000-' + String(req.user.id || 1).padStart(12, '0'),
+                          metadata: {
+                            month: monthName,
+                            monthNumber: firstMonth,
+                            monthIndex: 1,
+                            totalMonths: 1,
+                            oldRegistrationFee: regFeeType === 'old' ? regFeeAmount : 0,
+                            newRegistrationFee: regFeeType === 'new' ? regFeeAmount : 0,
+                            isAutoGenerated: true,
+                            registrationFee: regFeeAmount,
+                            isFreeStudent: true,
+                            registrationFeeType: regFeeType
+                          },
+                          items: {
+                            create: [{
+                              description: 'Registration Fee (Free Student)',
+                              feeCategory: 'REGISTRATION',
+                              amount: regFeeAmount,
+                              accountId
+                            }]
+                          }
+                        }
+                      });
+                      generatedCount++;
+                    }
+                    continue; // free students get no tuition invoices
+                  }
+
+                  for (let monthIndex = 0; monthIndex < monthsToGenerate.length; monthIndex++) {
+                    const targetMonth = monthsToGenerate[monthIndex];
+                    const isFirstMonth = monthIndex === 0;
+                    const monthName = ethiopianMonthNames[targetMonth - 1] || `Month ${targetMonth}`;
+                    
+                    const lastDayOfMonth = targetMonth === 13 ? pagumeDays : 30;
+                    let dueDate = toGregorian(ethiopianYear, targetMonth, lastDayOfMonth);
+                    // Normalize to NOON local time so the date displays correctly in any timezone
+                    dueDate.setHours(12, 0, 0, 0);
+                    if (dueDate < today) {
+                      dueDate = new Date(today);
+                      dueDate.setHours(12, 0, 0, 0);
+                      dueDate.setDate(dueDate.getDate() + 10);
+                    }
+                    
+                    const registrationFee = isFirstMonth ? newRegistrationFee : 0;
+                    const invoiceAmount = monthlyAmount + registrationFee;
+                    
+                    const invoiceItems = [
+                      {
+                        description: `${monthName} Monthly Fee (Month ${monthIndex + 1} of ${selectedMonths.length})`,
+                        feeCategory: 'TUITION',
+                        amount: monthlyAmount,
+                        accountId
+                      }
+                    ];
+                    
+                    if (isFirstMonth && registrationFee > 0) {
+                      invoiceItems.push({
+                        description: 'Registration Fee (One-time)',
+                        feeCategory: 'TUITION',
+                        amount: registrationFee,
+                        accountId
+                      });
+                    }
+                    
+                    const invoiceNumber = `INV-${Date.now()}-${studentUuid.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}-M${monthIndex + 1}`;
+                    
+                    // Generate unique 10-digit invoice reference code
+                    const { generateUniqueInvoiceRefCode } = require('../utils/invoiceRefCode');
+                    const invoiceRefCode = await generateUniqueInvoiceRefCode(async (code) => {
+                      const existing = await prisma.invoice.findUnique({ where: { invoiceRefCode: code } });
+                      return !!existing;
+                    });
+
+                    await prisma.invoice.create({
+                      data: {
+                        invoiceNumber,
+                        invoiceRefCode,
+                        studentId: studentUuid,
+                        academicYearId: feeStructure.academicYearId || '00000000-0000-0000-0000-000000000001',
+                        feeStructureId: feeStructure.id,
+                        issueDate: new Date(),
+                        dueDate,
+                        totalAmount: invoiceAmount,
+                        discountAmount: 0,
+                        lateFeeAmount: 0,
+                        netAmount: invoiceAmount,
+                        paidAmount: 0,
+                        status: 'ISSUED',
+                        campusId,
+                        createdBy: '00000000-0000-0000-0000-' + String(req.user.id || 1).padStart(12, '0'),
+                        metadata: {
+                          month: monthName,
+                          monthNumber: targetMonth,
+                          monthIndex: monthIndex + 1,
+                          totalMonths: selectedMonths.length,
+                          oldRegistrationFee: isFirstMonth ? oldRegistrationFee : 0,
+                          newRegistrationFee: isFirstMonth ? newRegistrationFee : 0,
+                          isAutoGenerated: true,
+                          registrationFee
+                        },
+                        items: { create: invoiceItems }
+                      }
+                    });
+                    
+                    generatedCount++;
+                  }
+                }
+                
+                console.log(`✅ Auto-generated ${generatedCount} invoices for ${students.rows.length} existing students in "${className}"`);
+              }
+            }
+          }
+        }
+      }
+    } catch (autoGenErr) {
+      console.error('⚠️ Auto-invoice generation for existing students failed (non-blocking):', autoGenErr.message);
+    }
+    
     res.status(201).json({
       message: 'Fee structure created successfully',
       data: feeStructure

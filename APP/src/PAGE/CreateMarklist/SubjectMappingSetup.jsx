@@ -1,9 +1,17 @@
 // PAGE/CreateMarklist/SubjectMappingSetup.jsx
 import React, { useState, useEffect } from 'react';
+import { getBranchCode } from '../../utils/branchCode';
 import styles from './CreateMarklist/CreateMarklist.module.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const branchHeaders = () => ({ 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() });
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
+const branchHeaders = () => ({ 'x-branch-code': getBranchCode() });
+
+const PRESET_SUBJECTS = [
+  'English', 'Mathematics', 'Physics', 'Chemistry', 'Biology',
+  'History', 'Geography', 'Amharic', 'Afan Oromo', 'Arabic',
+  'Islamic Studies', 'ICT', 'Physical Education', 'Art', 'Music',
+  'Civic & Ethical Education', 'Science', 'Economics'
+];
 
 const SubjectConfiguration = ({ onSubjectsConfigured }) => {
   const [subjects, setSubjects] = useState([]);
@@ -23,9 +31,15 @@ const SubjectConfiguration = ({ onSubjectsConfigured }) => {
         headers: branchHeaders()
       });
       const data = await res.json();
-      setSubjects(data);
+      // FIX: guard against 400/500 responses that return an error object —
+      // subjects must always be an array or .some()/.map() crash the page
+      setSubjects(Array.isArray(data) ? data : []);
+      if (!res.ok) {
+        console.error('Error fetching subjects:', data?.message || data?.error || res.status);
+      }
     } catch (err) {
       console.error('Error fetching subjects:', err);
+      setSubjects([]);
     }
   };
 
@@ -43,6 +57,29 @@ const SubjectConfiguration = ({ onSubjectsConfigured }) => {
       if (res.ok) {
         setNewSubjectName('');
         setMessage('Subject added!');
+        fetchSubjects();
+      } else {
+        setMessage(data.error || 'Failed to add subject');
+      }
+    } catch (err) {
+      setMessage('Error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickAdd = async (presetName) => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/mark-list/add-subject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...branchHeaders() },
+        body: JSON.stringify({ subject_name: presetName }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage(`"${presetName}" added!`);
         fetchSubjects();
       } else {
         setMessage(data.error || 'Failed to add subject');
@@ -111,9 +148,42 @@ const SubjectConfiguration = ({ onSubjectsConfigured }) => {
         <p>Add, edit, or remove subjects. Existing subjects are preserved.</p>
       </div>
 
+      {/* Quick add basic subjects */}
+      <div className={styles.inputGroup}>
+        <label>Quick Add Basic Subjects</label>
+        <p style={{ margin: '0 0 0.75rem', color: '#6b7280', fontSize: '0.85rem' }}>
+          Click a subject below to add it, or type a custom one and click Add.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {PRESET_SUBJECTS
+            .filter(p => !subjects.some(s => s.subject_name.toLowerCase() === p.toLowerCase()))
+            .map(p => (
+              <button
+                key={p}
+                onClick={() => handleQuickAdd(p)}
+                disabled={loading}
+                style={{
+                  padding: '0.45rem 1rem', borderRadius: '20px', cursor: 'pointer',
+                  background: '#f0f4ff', border: '1.5px solid #93c5fd', color: '#1d4ed8',
+                  fontSize: '0.85rem', fontWeight: 600
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#dbeafe'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f0f4ff'; }}
+              >
+                + {p}
+              </button>
+            ))}
+          {PRESET_SUBJECTS.every(p => subjects.some(s => s.subject_name.toLowerCase() === p.toLowerCase())) && (
+            <span style={{ color: '#9ca3af', fontSize: '0.85rem', padding: '0.3rem 0' }}>
+              All basic subjects added ✓
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Add new subject */}
       <div className={styles.inputGroup}>
-        <label>Add New Subject</label>
+        <label>Add Custom Subject</label>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <input
             type="text"

@@ -9,7 +9,7 @@
 
 .container.printMode {
   padding: 0;
-  background: var(--bg-primary);
+  background: white;
   min-height: auto;
 }
 
@@ -25,14 +25,14 @@
   align-items: center;
   justify-content: center;
   min-height: 60vh;
-  color: var(--text-secondary);
+  color: #718096;
 }
 
 .spinner {
   font-size: 2rem;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
-  color: #2c5aa0;
+  color: #6F56FF;
 }
 
 @keyframes spin {
@@ -41,7 +41,7 @@
 
 /* ===== HEADER ===== */
 .header {
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%);
+  background: linear-gradient(135deg, #6F56FF 0%, #5b46d6 100%);
   border-radius: 20px;
   padding: 28px 36px;
   margin-bottom: 24px;
@@ -52,7 +52,7 @@
   display: flex;
   align-items: center;
   gap: 20px;
-  color: var(--bg-primary);
+  color: white;
 }
 
 .headerIcon {
@@ -77,7 +77,7 @@
   flex-wrap: wrap;
   gap: 20px;
   align-items: flex-end;
-  background: var(--bg-primary);
+  background: white;
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 24px;
@@ -101,17 +101,17 @@
 
 .controlGroup select {
   padding: 12px 16px;
-  border: 2px solid var(--border-primary);
+  border: 2px solid #e2e8f0;
   border-radius: 10px;
   font-size: 0.95rem;
   min-width: 200px;
   outline: none;
   cursor: pointer;
-  background: var(--bg-primary);
+  background: white;
 }
 
 .controlGroup select:focus {
-  border-color: #2c5aa0;
+  border-color: #6F56FF;
 }
 
 /* ===== ACTION BUTTONS ===== */
@@ -141,18 +141,23 @@
 }
 
 .printBtn {
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%);
-  color: var(--bg-primary);
+  background: linear-gradient(135deg, #6F56FF 0%, #5b46d6 100%);
+  color: white;
 }
 
 .printAllBtn {
   background: #3498db;
-  color: var(--bg-primary);
+  color: white;
 }
 
 .pdfBtn {
   background: #e74c3c;
-  color: var(--bg-primary);
+  color: white;
+}
+
+.imgBtn {
+  background: #f39c12;
+  color: white;
 }
 
 .actionButtons button:hover:not(:disabled) {
@@ -167,9 +172,9 @@
   align-items: center;
   justify-content: center;
   padding: 80px;
-  background: var(--bg-primary);
+  background: white;
   border-radius: 20px;
-  color: #a0aec0;
+  color: #4a5568;
 }
 
 .noDataIcon {
@@ -185,7 +190,7 @@
 
 /* ===== PREVIEW ===== */
 .previewSection {
-  background: var(--bg-primary);
+  background: white;
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
@@ -203,857 +208,459 @@
   overflow-x: auto;
 }
 
-/* ===== REPORT CARD (A5: 148mm x 210mm) ===== */
+
+/* ===== NEW STYLES: PRINT BUTTONS ===== */
+.imgBtn {
+  background: #f39c12;
+  color: white;
+}
+
+/* ===== REPORT CARD - Single Page (A5) ===== */
 .reportCard {
   width: 148mm;
-  background: var(--bg-primary);
-  font-family: 'Arial', 'Segoe UI', sans-serif;
-  color: #000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-/* ===== BACK PAGE LEFT - Grading System ===== */
-.backPageLeft {
-  width: 148mm;
   min-height: 210mm;
-  padding: 12mm;
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border: 3px solid #2c5aa0;
-  position: relative;
+  box-sizing: border-box;
   page-break-after: always;
 }
 
-.gradingSystemSection {
-  font-family: 'Arial', sans-serif;
-}
-
-.gradingTitle {
-  font-size: 14pt;
-  font-weight: bold;
-  color: #2c5aa0;
-  margin: 0 0 8mm 0;
-  text-align: center;
-  text-transform: uppercase;
-  border-bottom: 2px solid #2c5aa0;
-  padding-bottom: 3mm;
-}
-
-.gradingIntro {
-  font-size: 10pt;
-  line-height: 1.6;
-  margin: 0 0 5mm 0;
-  text-align: justify;
-  color: var(--text-primary);
-}
-
-.gradingList {
-  margin: 5mm 0;
-  padding: 5mm;
-  background: var(--bg-primary);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.gradeRow {
-  display: flex;
-  align-items: center;
-  padding: 3mm 0;
-  border-bottom: 1px solid var(--border-primary);
-  font-size: 10pt;
-}
-
-.gradeRow:last-child {
-  border-bottom: none;
-}
-
-.gradeRange {
-  font-weight: bold;
-  color: #2c5aa0;
-  min-width: 30mm;
-  font-size: 11pt;
-}
-
-.gradeDesc {
-  flex: 1;
-  color: #444;
-}
-
-.gradingNote {
-  font-size: 9pt;
-  line-height: 1.5;
-  margin: 5mm 0;
-  padding: 4mm;
-  background: #fff3cd;
-  border-left: 4px solid #ffc107;
-  border-radius: 4px;
-  text-align: justify;
-  color: #856404;
-}
-
-/* ===== BACK PAGE RIGHT - Student Information ===== */
-.backPageRight {
-  width: 148mm;
+.outerBorder {
+  width: 100%;
   min-height: 210mm;
-  padding: 10mm;
-  background: var(--bg-primary);
-  border: 3px solid #2c5aa0;
-  position: relative;
-  page-break-after: always;
+  border: 1px solid #c0392b;
+  border-radius: 2mm;
+  padding: 1.5mm;
+  box-sizing: border-box;
+  background: white;
 }
 
-.schoolHeader {
-  text-align: center;
-  margin-bottom: 6mm;
-  padding-bottom: 4mm;
-  border-bottom: 3px double #2c5aa0;
-}
-
-.headerLogo {
-  width: 25mm;
-  height: 25mm;
-  object-fit: contain;
-  margin-bottom: 3mm;
-}
-
-.schoolInfo {
-  line-height: 1.4;
-}
-
-.schoolNameArabic {
-  font-size: 14pt;
-  font-weight: bold;
-  color: #2c5aa0;
-  margin: 2mm 0;
-  direction: rtl;
-}
-
-.schoolNameOromo {
-  font-size: 11pt;
-  font-weight: bold;
-  color: #000;
-  margin: 1mm 0;
-}
-
-.schoolNameAmharic {
-  font-size: 11pt;
-  font-weight: bold;
-  color: #000;
-  margin: 2mm 0;
-}
-
-.contactInfo {
-  font-size: 9pt;
-  color: #555;
-  margin: 2mm 0 0 0;
-}
-
-.reportCardTitle {
-  font-size: 13pt;
-  font-weight: bold;
-  text-align: center;
-  color: var(--bg-primary);
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%);
-  padding: 3mm;
-  margin: 4mm 0;
-  border-radius: 6px;
-  text-transform: uppercase;
-  letter-spacing: 1pt;
-}
-
-.studentInfoSection {
-  font-size: 9pt;
-  line-height: 1.8;
-}
-
-.infoField {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  margin-bottom: 3mm;
-  padding: 2mm;
-  background: var(--bg-secondary);
-  border-radius: 4px;
-}
-
-.infoFieldRow {
-  display: flex;
-  gap: 4mm;
-  margin-bottom: 3mm;
-}
-
-.infoFieldHalf {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  padding: 2mm;
-  background: var(--bg-secondary);
-  border-radius: 4px;
-}
-
-.fieldLabel {
-  font-weight: 600;
-  color: #2c5aa0;
-  margin-right: 2mm;
-  white-space: nowrap;
-}
-
-.fieldValue {
-  font-weight: bold;
-  color: #000;
-  border-bottom: 1px solid #2c5aa0;
-  min-width: 20mm;
-  padding: 0 2mm;
-  margin: 0 2mm;
-}
-
-.fieldLabelArabic {
-  font-size: 8pt;
-  color: var(--text-secondary);
-  direction: rtl;
-  margin-left: 2mm;
-}
-
-.signatureSection {
-  margin-top: 6mm;
-  padding-top: 4mm;
-  border-top: 2px solid var(--border-primary);
-}
-
-.signatureLine {
-  margin-top: 2mm;
-  padding: 3mm;
-  border: 1px dashed #2c5aa0;
-  border-radius: 4px;
-  min-height: 10mm;
-}
-
-.schoolFooter {
-  margin-top: 6mm;
-  text-align: center;
-  padding-top: 3mm;
-  border-top: 2px solid #2c5aa0;
-}
-
-.schoolFooterText {
-  font-size: 10pt;
-  font-weight: bold;
-  color: #2c5aa0;
-  margin: 0;
-}
-
-/* ===== FRONT PAGE - Subjects Table ===== */
-.frontPage {
-  width: 148mm;
+.innerBorder {
+  width: 100%;
   min-height: 210mm;
-  padding: 10mm;
-  background: var(--bg-primary);
-  border: 3px solid #2c5aa0;
+  border: 1px solid #e67e22;
+  border-radius: 1.5mm;
+  padding: 3mm 4mm;
   position: relative;
-  page-break-after: always;
-}
-
-/* ===== FRONT PAGE - Top and Bottom Layout ===== */
-.frontPage {
-  width: 148mm;
-  min-height: 210mm;
-  padding: 10mm;
-  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-  border: 4px solid #2c5aa0;
-  position: relative;
-  page-break-after: always;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  box-shadow: inset 0 0 0 1px rgba(44, 90, 160, 0.2);
 }
 
-/* TOP SECTION - Student Information */
-.frontTop {
-  margin-bottom: 5mm;
-  padding-bottom: 4mm;
-  border-bottom: 3px double #2c5aa0;
-  background: var(--bg-primary);
-  padding: 4mm;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+.decorCornerTR {
+  position: absolute;
+  top: 2mm;
+  right: 2mm;
+  width: 12mm;
+  height: 12mm;
+  border-top: 3mm solid #e67e22;
+  border-right: 3mm solid #e67e22;
+  border-top-right-radius: 2mm;
 }
 
-.frontTopHeader {
+.decorCornerBL {
+  position: absolute;
+  bottom: 2mm;
+  left: 2mm;
+  width: 12mm;
+  height: 12mm;
+  border-bottom: 3mm solid #e67e22;
+  border-left: 3mm solid #e67e22;
+  border-bottom-left-radius: 2mm;
+}
+
+.frontContent {
   display: flex;
-  gap: 5mm;
-  margin-bottom: 4mm;
-  align-items: flex-start;
+  flex-direction: column;
+  flex: 1;
+  gap: 2mm;
 }
 
-.photoBoxFront {
-  width: 30mm;
-  height: 35mm;
-  border: 3px solid #2c5aa0;
+/* ===== Header ===== */
+.headerSection {
+  display: flex;
+  gap: 3mm;
+  align-items: center;
+}
+
+.logoContainer {
+  width: 28mm;
+  height: 28mm;
+  border-radius: 50%;
+  border: 2px solid #c0392b;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, #e3f2fd 100%);
   overflow: hidden;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(44, 90, 160, 0.2);
-  flex-shrink: 0;
-  position: relative;
+  background: white;
 }
 
-.photoBoxFront::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  border-radius: 4px;
-  pointer-events: none;
+.mainLogo {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
+  border-radius: 50%;
 }
 
-.schoolInfoBox {
+.schoolInfo {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3mm;
+}
+
+.schoolNameMain {
+  font-size: 18pt;
+  font-weight: 900;
   text-align: center;
-  line-height: 1.5;
-  padding: 2mm;
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border-radius: 6px;
-  border: 2px solid #e3f2fd;
-}
-
-.schoolNameArabic {
-  font-size: 13pt;
-  font-weight: bold;
-  color: #2c5aa0;
-  margin: 1mm 0;
-  direction: rtl;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.schoolNameOromo {
-  font-size: 10pt;
-  font-weight: bold;
-  color: #1e3a6f;
-  margin: 0.5mm 0;
-  letter-spacing: 0.3pt;
+  color: #c0392b;
+  line-height: 1.1;
+  letter-spacing: 2px;
+  font-family: 'Georgia', 'Times New Roman', serif;
 }
 
 .schoolNameAmharic {
-  font-size: 10pt;
-  font-weight: bold;
-  color: #1e3a6f;
-  margin: 1mm 0;
-}
-
-.contactInfo {
-  font-size: 8pt;
-  color: var(--text-secondary);
-  margin: 1mm 0;
-  font-style: italic;
-}
-
-.reportCardTitle {
-  font-size: 13pt;
-  font-weight: bold;
+  font-size: 6.5pt;
   text-align: center;
-  color: var(--bg-primary);
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%);
-  padding: 3mm;
-  margin: 3mm 0;
-  border-radius: 6px;
-  text-transform: uppercase;
-  letter-spacing: 1.5pt;
-  box-shadow: 0 4px 12px rgba(44, 90, 160, 0.3);
-  position: relative;
-  overflow: hidden;
+  color: #555;
+  line-height: 1.2;
 }
 
-.reportCardTitle::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  animation: shimmer 3s infinite;
-}
-
-@keyframes shimmer {
-  0% { left: -100%; }
-  100% { left: 100%; }
-}
-
-.studentInfoGrid {
+.schoolTagline {
   font-size: 8pt;
-  line-height: 1.6;
+  font-weight: 600;
+  text-align: center;
+  color: #e67e22;
+  line-height: 1.1;
 }
 
-.infoFieldFrontTop {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  margin-bottom: 2mm;
-  padding: 2.5mm;
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border-radius: 4px;
-  gap: 2mm;
-  border-left: 4px solid #2c5aa0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+.schoolNameArabic {
+  font-size: 7pt;
+  text-align: center;
+  color: #c0392b;
+  line-height: 1.2;
+  direction: rtl;
 }
 
-.infoRowFrontTop {
+.schoolNameEnglish {
+  font-size: 6.5pt;
+  text-align: center;
+  color: #c0392b;
+  line-height: 1.2;
+}
+
+.schoolLocation {
+  font-size: 6.5pt;
+  text-align: center;
+  color: #555;
+  line-height: 1.2;
+}
+
+/* ===== Title ===== */
+.titleContainer {
   display: flex;
+  align-items: center;
   gap: 3mm;
-  margin-bottom: 2mm;
+  margin: 1mm 0;
 }
 
-.infoFieldHalfFrontTop {
+.titleLine {
+  flex: 1;
+  height: 1px;
+  background: #e67e22;
+}
+
+.cardTitle {
+  font-size: 13pt;
+  font-weight: 900;
+  color: #c0392b;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ===== Student Info ===== */
+.studentInfoGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+}
+
+.infoGridRow {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+  flex-wrap: wrap;
+  font-size: 7.5pt;
+}
+
+.infoLabel {
+  font-weight: 700;
+  color: #333;
+}
+
+.infoValue {
+  font-weight: 400;
+  color: #000;
+  text-decoration: underline;
+  padding: 0 1mm;
+  display: inline;
+}
+
+.infoLabelAr {
+  font-size: 6pt;
+  color: #888;
+  direction: rtl;
+  margin-left: 1mm;
+}
+
+/* ===== Parent Section ===== */
+.parentSection {
+  margin-top: 1mm;
+  font-size: 7.5pt;
+}
+
+.parentSignature {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  flex-wrap: wrap;
+}
+
+.sigLabel {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.sigLine {
+  border-bottom: 1px solid #333;
+  height: 4mm;
+  flex: 1;
+}
+
+.sigDate {
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* ===== Table Area ===== */
+.tableArea {
   flex: 1;
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  padding: 2.5mm;
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border-radius: 4px;
-  gap: 2mm;
-  border-left: 4px solid #2c5aa0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  flex-direction: column;
 }
 
-.fieldLabelFrontTop {
-  font-weight: 700;
-  color: #2c5aa0;
-  white-space: nowrap;
-  font-size: 8pt;
-  text-transform: capitalize;
-}
-
-.fieldValueFrontTop {
-  font-weight: bold;
-  color: #000;
-  border-bottom: 2px solid #2c5aa0;
-  min-width: 15mm;
-  padding: 0 2mm 1mm 2mm;
-  font-size: 9pt;
-}
-
-.fieldLabelArabic {
-  font-size: 7pt;
-  color: var(--text-secondary);
-  direction: rtl;
-  font-style: italic;
-  opacity: 0.8;
-}
-
-/* BOTTOM SECTION - Subjects Table */
-.frontBottom {
-  flex: 1;
-  background: var(--bg-primary);
-  padding: 4mm;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.sectionTitleBottom {
-  font-size: 11pt;
-  font-weight: bold;
-  color: var(--bg-primary);
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%);
-  padding: 2.5mm;
-  margin: 0 0 3mm 0;
-  border-radius: 6px;
-  text-align: center;
-  box-shadow: 0 3px 8px rgba(44, 90, 160, 0.3);
-  letter-spacing: 0.5pt;
-}
-
-.frontMarksTable {
-  width: 100%;
-  border-collapse: collapse;
-  border: 3px solid #2c5aa0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  font-size: 8pt;
-  border-radius: 6px;
+.tableWrap {
   overflow: hidden;
+  border-radius: 5px;
+  border: 1px solid #333;
 }
 
-.frontMarksTable thead th {
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%);
-  color: var(--bg-primary);
-  padding: 3mm;
-  text-align: center;
-  font-weight: bold;
-  font-size: 9pt;
-  border: 1px solid #1e3a6f;
-  line-height: 1.4;
-  text-transform: uppercase;
-  letter-spacing: 0.3pt;
-}
-
-.subjectColFront {
-  text-align: left !important;
-  padding-left: 3mm !important;
-  min-width: 45mm;
-}
-
-.subjectColFront div {
-  margin: 0.5mm 0;
-}
-
-.subjectOromo {
-  font-size: 9pt;
-  font-weight: 600;
-  color: #000;
-  line-height: 1.3;
-}
-
-.subjectArabic {
-  font-size: 8pt;
-  direction: rtl;
-  color: var(--text-secondary);
-  font-style: italic;
-  opacity: 0.9;
-  line-height: 1.3;
-}
-
-.arabicTextSmall {
-  font-size: 7pt;
-  direction: rtl;
-  opacity: 0.9;
-  font-style: italic;
-}
-
-.frontMarksTable tbody td {
-  padding: 2.5mm;
-  border: 1px solid #2c5aa0;
-  color: #000;
-  font-size: 9pt;
-  text-align: center;
-  background: var(--bg-primary);
-}
-
-.frontMarksTable tbody tr:nth-child(even) {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-}
-
-.frontMarksTable tbody tr:hover {
-  background: linear-gradient(135deg, #e3f2fd 0%, var(--bg-secondary) 100%);
-}
-
-.subjectNameFront {
-  text-align: left !important;
-  padding-left: 3mm !important;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.subjectNameFront div {
-  margin: 0.5mm 0;
-}
-
-.markCell {
-  font-weight: 600;
-  color: #1e3a6f;
-  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-}
-
-.avgCell {
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%) !important;
-  font-weight: bold;
-  color: var(--bg-primary) !important;
-  font-size: 10pt;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.conductRow {
-  background: linear-gradient(135deg, #fff3cd 0%, var(--bg-primary) 100%) !important;
-}
-
-.conductCell {
-  background: linear-gradient(135deg, #fff3cd 0%, var(--bg-primary) 100%) !important;
-  border: 1px solid #ffc107 !important;
-}
-
-.totalRowFront {
-  font-weight: bold;
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
-}
-
-.totalRowFront td {
-  font-weight: bold;
-  color: #1e3a6f;
-  border: 2px solid #2c5aa0 !important;
-}
-
-.totalCell {
-  font-size: 10pt;
-  font-weight: bold;
-  color: #2c5aa0;
-  background: linear-gradient(135deg, #e3f2fd 0%, var(--bg-primary) 100%) !important;
-}
-
-.totalAvgCell {
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%) !important;
-  font-weight: bold;
-  color: var(--bg-primary) !important;
-  font-size: 11pt;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.rankRow {
-  background: linear-gradient(135deg, #c8e6c9 0%, #e8f5e9 100%) !important;
-}
-
-.rankCell {
-  font-size: 10pt;
-  font-weight: bold;
-  color: #2e7d32;
-  background: linear-gradient(135deg, #e8f5e9 0%, var(--bg-primary) 100%) !important;
-}
-
-.rankAvgCell {
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%) !important;
-  font-weight: bold;
-  color: var(--bg-primary) !important;
-  font-size: 11pt;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.promotedBadge {
-  display: inline-block;
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
-  color: var(--bg-primary);
-  padding: 1.5mm 4mm;
-  border-radius: 4px;
-  font-weight: bold;
-  font-size: 9pt;
-  text-align: center;
-  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.5pt;
-}
-
-.photoPlaceholder {
-  font-size: 10pt;
-  font-weight: bold;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 1pt;
-}
-
-.studentPhoto {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* Marks Table */
 .marksTable {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 5mm;
-  border: 2px solid #2c5aa0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  table-layout: fixed;
+  font-size: 7pt;
 }
 
-.marksTable th {
-  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a6f 100%);
-  color: var(--bg-primary);
-  padding: 3mm;
-  text-align: center;
-  font-weight: bold;
-  font-size: 9pt;
-  border: 1px solid #1e3a6f;
-}
-
-.subjectCol {
-  text-align: left !important;
-  padding-left: 3mm !important;
-}
-
-.arabicText {
-  font-size: 8pt;
-  direction: rtl;
-  margin-top: 1mm;
-  opacity: 0.9;
-}
-
+.marksTable th,
 .marksTable td {
-  padding: 2.5mm;
-  border: 1px solid #2c5aa0;
-  color: #000;
-  font-size: 9pt;
+  border: 1px solid #333;
+  padding: 1.2mm 1.5mm;
   text-align: center;
-  background: var(--bg-primary);
 }
 
-.marksTable tbody tr:nth-child(even) {
-  background: var(--bg-secondary);
+.marksTable thead th {
+  background: #8b0000;
+  color: white;
+  font-weight: 700;
+  font-size: 6.5pt;
+  border: 1px solid #600000;
+  padding: 1.5mm 1.5mm;
 }
 
-.subjectName {
-  text-align: left !important;
-  padding-left: 3mm !important;
-  font-weight: 500;
+.subjCol { text-align: left; width: auto; min-width: 22mm; }
+.termCol { min-width: 10mm; }
+.avgCol { min-width: 10mm; }
+
+.subjCell {
+  text-align: left;
+  padding: 1mm 1.5mm !important;
 }
 
-.totalRow {
-  font-weight: bold;
-  background: #e3f2fd !important;
+.subjNameEng {
+  font-weight: 600;
+  font-size: 6.5pt;
+  display: block;
 }
 
-.totalRow td {
-  font-weight: bold;
-  color: #2c5aa0;
+.subjNameAr {
+  font-size: 5.5pt;
+  color: #888;
+  direction: rtl;
+  display: block;
+}
+
+.markCell { text-align: center; font-size: 7pt; }
+.avgCell { text-align: center; font-weight: 600; font-size: 7pt; }
+
+.summaryLabel {
+  font-weight: 700;
+  font-size: 7pt;
+  text-align: left;
+}
+
+.summaryCell {
+  text-align: center;
+  font-weight: 700;
+  font-size: 7pt;
+}
+
+.totalRow td { background: #fdf2e9; font-weight: 700; }
+.avgRow td { background: #fef9e7; font-weight: 700; }
+.rankRow td { background: #eaf2f8; font-weight: 700; }
+
+/* ===== Grading Scale & Signatures ===== */
+.gradingSection {
+  margin-top: 2mm;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+}
+
+.gradingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2mm;
+  font-size: 6.5pt;
+  border: 1px solid #333;
+  padding: 1.5mm 2mm;
+  border-radius: 2px;
+}
+
+.gradingTitle {
+  font-weight: 700;
+  color: #c0392b;
+}
+
+.signatureRow {
+  display: flex;
+  gap: 5mm;
+  margin-top: auto;
+}
+
+.signatureBlock {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1mm;
+  font-size: 7pt;
+}
+
+.signatureLabel {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sigLine2 {
+  width: 100%;
+  border-bottom: 1px solid #333;
+  height: 6mm;
+}
+
+/* ===== Footer ===== */
+.footerSection {
+  margin-top: auto;
+}
+
+.footerDeco {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+}
+
+.footerLine {
+  flex: 1;
+  height: 1px;
+  background: #e67e22;
+}
+
+.footerBrand {
+  font-size: 16pt;
+  font-weight: 900;
+  color: #c0392b;
+  letter-spacing: 3px;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.footerTagline {
+  font-size: 8pt;
+  font-weight: 600;
+  color: #e67e22;
+  text-align: center;
+  line-height: 1.2;
 }
 
 /* ===== PRINT CONTAINER ===== */
 .printContainer {
-  display: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5mm;
+  padding: 5mm 0;
 }
-
-.printMode .printContainer {
-  display: block;
-}
-
 .printCard {
-  width: 148mm;
-  page-break-after: always;
-  break-after: page;
-}
-
-/* ===== PRINT STYLES ===== */
-@media print {
-  body * {
-    visibility: hidden;
-  }
-
-  .container,
-  .container *,
-  .printContainer,
-  .printContainer * {
-    visibility: visible;
-  }
-
-  .screenOnly {
-    display: none !important;
-  }
-
-  .container {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 0;
-    margin: 0;
-    background: var(--bg-primary);
-  }
-
-  .printContainer {
-    display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 148mm;
-  }
-
-  @page {
-    size: A5 portrait;
-    margin: 0;
-  }
-
-  .printCard {
-    width: 148mm;
-    page-break-after: always;
-    break-after: page;
-  }
-
-  .reportCard {
-    width: 100%;
-    box-shadow: none;
-  }
-
-  .frontPage {
-    page-break-after: always;
-    break-after: page;
-  }
-
-  .backPageLeft,
-  .backPageRight {
-    page-break-before: auto;
-    break-before: auto;
-    page-break-after: always;
-    break-after: page;
-  }
-
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* ===== RESPONSIVE ===== */
+@media print {
+  body { 
+    -webkit-print-color-adjust: exact; 
+    print-color-adjust: exact; 
+  }
+  .container { padding: 0; background: white; min-height: auto; }
+  .header { display: none !important; }
+  .controls { display: none !important; }
+  .noData, .loadingReport { display: none !important; }
+  .previewSection h3 { display: none !important; }
+  .previewSection { padding: 0 !important; box-shadow: none !important; }
+  .reportCard { box-shadow: none; }
+  .printContainer { padding: 0; gap: 0; display: block !important; }
+  .printCard { page-break-after: always; }
+  @page { margin: 0; }
+}
+
 @media (max-width: 768px) {
-  .container {
-    padding: 16px;
-  }
-
-  .header {
-    padding: 20px;
-    border-radius: 16px;
-  }
-
-  .header h1 {
-    font-size: 1.4rem;
-  }
-
-  .controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .controlGroup select {
-    min-width: 100%;
-  }
-
-  .actionButtons {
-    margin-left: 0;
-    justify-content: center;
-  }
-
-  .reportCard {
-    width: 100%;
-    max-width: 148mm;
-  }
+  .container { padding: 16px; }
+  .header { padding: 20px; border-radius: 16px; }
+  .header h1 { font-size: 1.4rem; }
+  .controls { flex-direction: column; align-items: stretch; }
+  .controlGroup select { min-width: 100%; }
+  .actionButtons { margin-left: 0; justify-content: center; flex-wrap: wrap; }
+  .reportCard { width: 100%; max-width: 148mm; }
 }
 
 @media (max-width: 480px) {
-  .header {
-    padding: 16px;
-  }
+  .header { padding: 16px; }
+  .headerIcon { font-size: 1.8rem; }
+  .header h1 { font-size: 1.2rem; }
+  .actionButtons button { padding: 10px 14px; font-size: 0.85rem; }
+  .noData { padding: 40px 20px; }
+  .noDataIcon { font-size: 3rem; }
+}
 
-  .headerIcon {
-    font-size: 1.8rem;
-  }
-
-  .header h1 {
-    font-size: 1.2rem;
-  }
-
-  .actionButtons button {
-    padding: 10px 14px;
-    font-size: 0.85rem;
-  }
-
-  .noData {
-    padding: 40px 20px;
-  }
-
-  .noDataIcon {
-    font-size: 3rem;
-  }
+.noGradesCell {
+  text-align: center;
+  padding: 24px 16px;
+  color: #64748b;
+  font-style: italic;
+  font-size: 0.9rem;
 }

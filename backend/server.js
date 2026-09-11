@@ -53,7 +53,9 @@ const task6Routes = require('./routes/task6Routes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const runAdminNameMigration = require('./migrations/fix_admin_name_in_conversations');
 const adminRoutes = require('./routes/adminRoutes');
+const registrationReportRoutes = require('./routes/registrationReportRoutes');
 const guardianListRoutes = require('./routes/guardianListRoutes');
+const deviceRoutes = require('./routes/deviceRoutes');
 const studentAttendanceRoutes = require('./routes/studentAttendanceRoutes');
 const classTeacherRoutes = require('./routes/classTeacherRoutes');
 const adminAttendanceRoutes = require('./routes/adminAttendanceRoutes');
@@ -62,7 +64,6 @@ const guardianAttendanceRoutes = require('./routes/guardianAttendanceRoutes');
 const guardianStudentAttendanceRoutes = require('./routes/guardianStudentAttendance');
 const evaluationBookRoutes = require('./routes/evaluationBookRoutes');
 const guardianPaymentsRoutes = require('./routes/guardianPayments');
-const guardianNotificationRoutes = require('./routes/guardianNotificationRoutes');
 const subAccountRoutes = require('./routes/subAccountRoutes');
 const reportsRoutes = require('./routes/reportsRoutes');
 const branchRoutes = require('./routes/branchRoutes');
@@ -100,10 +101,21 @@ const studentActivitiesRoutes = require('./routes/studentActivitiesRoutes');
 const superAdminRoutes = require('./routes/superAdminRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const yearRolloverRoutes = require('./routes/yearRolloverRoutes');
+const financeAppRoutes = require('./routes/financeAppRoutes');
+const superFinanceRoutes = require('./routes/superFinanceRoutes');
+const smsRoutes = require('./routes/smsRoutes');
+const aiTestGeneratorRoutes = require('./routes/aiTestGenerator');
 // const aiContentRoutes = require('./routes/aiContentRoutes'); // Gemini AI removed
 
 // Database pool
 const pool = require('./config/db');
+
+// Global error handler
+const { errorHandler, onUncaughtException, onUnhandledRejection } = require('./middleware/errorHandler');
+
+// Global process-level error handlers (prevents Node crashes → nginx 502s)
+process.on('uncaughtException', onUncaughtException);
+process.on('unhandledRejection', onUnhandledRejection);
 
 // Service imports for device user persistence
 const syncCoordinator = require('./services/SyncCoordinator');
@@ -130,8 +142,8 @@ if (process.env.NODE_ENV === 'production' && process.env.HTTPS_ENABLED === 'true
 const io = new Server(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production'
-      ? [process.env.FRONTEND_URL || 'https://v2.skoolific.com']
-      : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5052'],
+      ? [process.env.FRONTEND_URL || 'https://iqra.skoolific.com']
+      : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:6005'],
     methods: ['GET', 'POST'],
     allowedHeaders: ['Authorization'],
     credentials: true
@@ -213,7 +225,7 @@ app.use(securityHeaders);
 
 // 3. CORS configuration - allows all *.skoolific.com subdomains + configured origins
 const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [process.env.FRONTEND_URL || 'https://v2.skoolific.com']
+  ? [process.env.FRONTEND_URL || 'https://iqra.skoolific.com']
    : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5052'];
 
 app.use(cors({
@@ -262,7 +274,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Branch database context middleware - auto-routes all DB queries to the correct branch
 const { branchContext } = require('./config/db');
 app.use((req, res, next) => {
-  const branchCode = req.headers['x-branch-code'] || req.body?.branchCode || req.query?.branchCode;
+  let branchCode = req.headers['x-branch-code'];
+  if (Array.isArray(branchCode)) branchCode = branchCode[0];
+  branchCode = branchCode || req.body?.branchCode || req.query?.branchCode;
+  if (Array.isArray(branchCode)) branchCode = branchCode[0];
+  // Sanitize: strip anything after a comma (prevents stored duplicate like "IQRA1, IQRA1")
+  if (branchCode && typeof branchCode === 'string') branchCode = branchCode.split(',')[0].trim();
   if (branchCode) {
     branchContext.run(branchCode, () => next());
   } else {
@@ -270,7 +287,47 @@ app.use((req, res, next) => {
   }
 });
 
-// 7. Input sanitization (comprehensive)
+// 7. Global branch code gate — ALL data routes MUST have a branch code
+// System routes (health, login, auth, public, super-admin, branch-management) are exempted.
+// Everything else (students, staff, finance, marks, schedule, attendance, etc.) requires a branch code.
+app.use((req, res, next) => {
+  // Only check /api/* routes
+  if (!req.path.startsWith('/api/')) return next();
+
+  // System routes that DON'T need a branch code
+  const systemPrefixes = [
+    '/api/health',
+    '/api/public',
+    '/api/v2/auth',
+    '/api/v2/branches',
+    '/api/super-admin',
+    '/api/finance-app',
+    '/api/super-finance',
+    '/api/settings/branding',
+  ];
+  for (const prefix of systemPrefixes) {
+    if (req.path.startsWith(prefix)) return next();
+  }
+
+  // Admin login endpoint (inside /api/admin) — no branch code needed
+  if (req.path === '/api/admin/login' || req.path.startsWith('/api/admin/login/')) return next();
+
+  // Check for branch code
+  let branchCode = req.headers['x-branch-code'];
+  if (Array.isArray(branchCode)) branchCode = branchCode[0];
+  branchCode = branchCode || req.body?.branchCode || req.query?.branchCode;
+  if (Array.isArray(branchCode)) branchCode = branchCode[0];
+  if (branchCode && typeof branchCode === 'string') branchCode = branchCode.split(',')[0].trim();
+  if (!branchCode) {
+    return res.status(400).json({
+      error: 'Branch code is required',
+      message: `All data operations require a branch code. Send X-Branch-Code header, ?branchCode=XXX query, or include in body. Path: ${req.path}`
+    });
+  }
+  next();
+});
+
+// 7b. Input sanitization (comprehensive)
 app.use(sanitizeRequest);
 app.use(preventInjection);
 app.use(sanitizeInputs); // Keep existing for backward compatibility
@@ -345,17 +402,19 @@ app.use('/api/school-setup', schoolSetupRoutes);
 app.use('/api/task6', task6Routes);
 app.use('/api/dashboard', dashboardRoutes); // This is CORRECT - dashboardRoutes will have routes like '/stats'
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/registration-report', registrationReportRoutes);
 app.use('/api/user-profile', require('./routes/userProfileRoutes')); // Username and password change for all user types
 app.use('/api/guardian-list', guardianListRoutes);
+app.use('/api/devices', deviceRoutes);
 app.use('/api/student-attendance', studentAttendanceRoutes);
 app.use('/api/class-teacher', classTeacherRoutes);
 app.use('/api/admin-attendance', adminAttendanceRoutes);
+app.use('/api/backup', require('./routes/backupRoutes'));
 app.use('/api/class-communication', classCommunicationRoutes);
 app.use('/api/guardian-attendance', guardianAttendanceRoutes);
 app.use('/api/guardian-student-attendance', guardianStudentAttendanceRoutes);
 app.use('/api/evaluation-book', evaluationBookRoutes);
 app.use('/api/guardian-payments', guardianPaymentsRoutes);
-app.use('/api/guardian-notifications', guardianNotificationRoutes);
 app.use('/api/admin/sub-accounts', subAccountRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/reports/finance', financeReportsRoutes);
@@ -391,10 +450,17 @@ app.use('/api/academic/student-attendance', academicStudentAttendanceRoutes);
 app.use('/api/tasks', taskStatusRoutes);
 app.use('/api/device-users', deviceUserManagementRoutes); // Device user persistence management
 app.use('/api/v2/branches', branchRoutes); // Multi-branch architecture routes
+app.use('/api/finance-app', financeAppRoutes); // Finance App login
+app.use('/api/super-finance', superFinanceRoutes); // Super Finance App login (all branches)
 app.use('/api/super-admin', superAdminRoutes); // Super Admin aggregation routes
 app.use('/api/v2/auth', require('./routes/authRoutes')); // Auth refresh + logout
 app.use('/api/ai', aiRoutes); // SKOOLIFIC AI Module
 app.use('/api/year-rollover', yearRolloverRoutes); // Year Rollover
+app.use('/api/sms', smsRoutes); // SMS Templates
+app.use('/api/ai', aiTestGeneratorRoutes); // AI Test Generator
+
+// Global error handler (must be after all routes)
+app.use(errorHandler);
 
 // ===========================================
 // FRONTEND SPA - Serve built React app
@@ -402,21 +468,25 @@ app.use('/api/year-rollover', yearRolloverRoutes); // Year Rollover
 const frontendDistPath = path.join(__dirname, '..', 'APP', 'dist');
 
 // Serve manifest files with correct Content-Type for PWA
-app.get('/manifest.json', (req, res) => {
+const serveManifest = (res, filePath) => {
   res.setHeader('Content-Type', 'application/manifest+json');
-  res.sendFile(path.join(frontendDistPath, 'manifest.json'));
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      res.status(404).json({ error: 'Manifest not found' });
+    }
+  });
+};
+app.get('/manifest.json', (req, res) => {
+  serveManifest(res, path.join(frontendDistPath, 'manifest.json'));
 });
 app.get('/manifest-staff.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/manifest+json');
-  res.sendFile(path.join(frontendDistPath, 'manifest-staff.json'));
+  serveManifest(res, path.join(frontendDistPath, 'manifest-staff.json'));
 });
 app.get('/manifest-student.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/manifest+json');
-  res.sendFile(path.join(frontendDistPath, 'manifest-student.json'));
+  serveManifest(res, path.join(frontendDistPath, 'manifest-student.json'));
 });
 app.get('/manifest-guardian.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/manifest+json');
-  res.sendFile(path.join(frontendDistPath, 'manifest-guardian.json'));
+  serveManifest(res, path.join(frontendDistPath, 'manifest-guardian.json'));
 });
 
 // Serve static files — no cache for index.html, long cache for assets
@@ -487,6 +557,12 @@ studentAttendanceAutoMarker.start();
 const guardianNotificationService = require('./services/guardianNotificationService');
 guardianNotificationService.start();
 console.log('✅ Guardian Notification Service started');
+
+// Firebase Push Notification Service (FCM)
+const pushNotificationService = require('./services/PushNotificationService');
+pushNotificationService.initialize()
+  .then(() => console.log('✅ Firebase Push Notification Service initialized'))
+  .catch(err => console.warn('⚠️ Firebase Push unavailable (not configured):', err.message));
 
 // DATABASE MIGRATIONS
 // ===========================================
@@ -625,7 +701,7 @@ const attendanceSystemInitializer = require('./services/attendanceSystemInitiali
   }
 
   // Start server after setup complete
-  const PORT = process.env.PORT || 5052;
+  const PORT = process.env.PORT || 6005;
   const HOST = '0.0.0.0'; // Listen on all network interfaces for mobile access
   server.listen(PORT, HOST, () => {
     console.log(`Server running on ${HOST}:${PORT}`);
@@ -641,10 +717,10 @@ const attendanceSystemInitializer = require('./services/attendanceSystemInitiali
   console.log('   Machine should push data directly to this endpoint');
   
   console.log('\n🔌 AI06 WebSocket Server Ready:');
-  console.log(`   Listening on port 7788 for AI06 device`);
+  console.log(`   Listening on port ${AI06_PORT} for AI06 device`);
   console.log(`   Configure AI06 device with:`);
   console.log(`   - Server IP: YOUR_LOCAL_IP (e.g., 192.168.1.100)`);
-  console.log(`   - Server Port: 7788`);
+  console.log(`   - Server Port: ${AI06_PORT}`);
   console.log(`   - Server Reg: YES`);
   });
   server.on('error', (err) => {

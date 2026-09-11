@@ -20,7 +20,7 @@ const GuardianMarks = () => {
     try {
       const guardianInfo = JSON.parse(localStorage.getItem('guardianInfo') || '{}');
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL || '/api'}/mark-list/guardian-marks/${guardianInfo.guardian_username}`
+        `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/mark-list/guardian-marks/${guardianInfo.guardian_username}`
       );
       
       if (response.data.success) {

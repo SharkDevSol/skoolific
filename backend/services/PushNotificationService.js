@@ -3,11 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const { Pool } = require('pg');
 
-// Create database pool
+// Create a dedicated pool for the GLOBAL device-token registry.
+// Device tokens are shared across all branches, so this uses its own fixed DB
+// (independent of the per-branch DB_NAME).
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'skoolific',
+  database: process.env.PUSH_DB || process.env.DEVICE_DB || 'skoolific',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD
 });

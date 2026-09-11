@@ -26,7 +26,13 @@ import { useToast } from '../../COMPONENTS/Toast/useToast';
 import ToastContainer from '../../COMPONENTS/Toast/ToastContainer';
 
 // API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5052/api';
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+  if (typeof window !== 'undefined') return window.location.origin + '/api';
+  return 'http://localhost:5052/api';
+};
+const API_BASE_URL = getApiBaseUrl();
 
 const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'];
 
@@ -222,8 +228,14 @@ const StudentAttendanceSystem = ({ preSelectedClass = null }) => {
       const response = await axios.get(`${API_BASE_URL}/schedule/config`);
       if (response.data) {
         const config = response.data;
+        // Convert numeric school_days to day names (1=Monday, 2=Tuesday, ..., 5=Friday)
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        let schoolDays = config.school_days || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        if (Array.isArray(schoolDays) && typeof schoolDays[0] === 'number') {
+          schoolDays = schoolDays.map(d => dayNames[d] || d);
+        }
         setSettings({
-          school_days: config.school_days || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+          school_days: schoolDays,
           shift_count: config.total_shifts || 1,
           shift_rotation: config.shift_rotation || false,
           periods_per_shift: config.periods_per_shift || 8,

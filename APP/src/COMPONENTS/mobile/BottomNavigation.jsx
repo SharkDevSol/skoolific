@@ -11,7 +11,7 @@ const BottomNavigation = ({ items, activeItem, onItemClick }) => {
   const { theme } = useApp();
   
   const activeStyle = {
-    color: theme?.primaryColor || '#e67e22'
+    color: theme?.primaryColor || '#7c3aed'
   };
 
   // Split items if more than MAX_VISIBLE_ITEMS

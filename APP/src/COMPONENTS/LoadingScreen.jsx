@@ -14,8 +14,8 @@ const LoadingScreen = () => {
           transition={{ duration: 0.6, ease: "easeOut" }}
         >
           <motion.img
-            src="/alkhwarizm-logo.png"
-            alt="ALKHWARIZM Logo"
+            src="/oneco.png"
+            alt="ONECO Logo"
             className={styles.logo}
             animate={{ 
               scale: [1, 1.05, 1],
@@ -27,16 +27,6 @@ const LoadingScreen = () => {
             }}
           />
         </motion.div>
-
-        {/* Brand Name */}
-        <motion.h1
-          className={styles.brandName}
-          initial={{ y: 30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.6 }}
-        >
-          ALKHWARIZM
-        </motion.h1>
 
         {/* Subtitle */}
         <motion.p

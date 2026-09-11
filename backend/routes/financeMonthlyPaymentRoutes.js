@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
-const prisma = new PrismaClient();
+const { branchPrisma: prisma } = require('../services/BranchPrismaService');
 
 // Security middleware
 const { authenticateWithBranch, validateBranchCode } = require('../middleware/branchAuth');
@@ -311,12 +310,38 @@ router.post('/record-payment', authenticateWithBranch, requirePermission(FINANCE
       const newPaidAmount = parseFloat(invoice.paidAmount) + parseFloat(amount);
       const newStatus = newPaidAmount >= parseFloat(invoice.netAmount) ? 'PAID' : 'PARTIALLY_PAID';
 
+      const invoiceUpdate = {
+        paidAmount: newPaidAmount,
+        status: newStatus
+      };
+
+      // FIX: Assign the sequential per-branch voucher number at PAYMENT time
+      if (newStatus === 'PAID' && !invoice.receiptNumber) {
+        const fs = require('fs');
+        const path = require('path');
+        const counterFile = path.join(__dirname, `../uploads/receipt-counter-${req.branchCode}.json`);
+        let lastNumber = 0;
+        if (fs.existsSync(counterFile)) {
+          try { lastNumber = JSON.parse(fs.readFileSync(counterFile, 'utf8')).lastNumber || 0; } catch (e) { lastNumber = 0; }
+        }
+        const nextNumber = lastNumber + 1;
+        const voucherNumber = String(nextNumber).padStart(6, '0');
+        fs.writeFileSync(counterFile, JSON.stringify({ lastNumber: nextNumber }), 'utf8');
+
+        const mappingFile = path.join(__dirname, `../uploads/invoice-receipt-mapping-${req.branchCode}.json`);
+        let mapping = {};
+        if (fs.existsSync(mappingFile)) {
+          try { mapping = JSON.parse(fs.readFileSync(mappingFile, 'utf8')); } catch (e) { mapping = {}; }
+        }
+        mapping[invoiceId] = voucherNumber;
+        fs.writeFileSync(mappingFile, JSON.stringify(mapping, null, 2), 'utf8');
+
+        invoiceUpdate.receiptNumber = voucherNumber;
+      }
+
       const updatedInvoice = await tx.invoice.update({
         where: { id: invoiceId },
-        data: {
-          paidAmount: newPaidAmount,
-          status: newStatus
-        }
+        data: invoiceUpdate
       });
 
       // Create audit log

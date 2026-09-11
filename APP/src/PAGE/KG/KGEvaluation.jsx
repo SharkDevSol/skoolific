@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { formatAPIError } from '../../utils/errorMessages';
+import { getBranchCode } from '../../utils/branchCode';
 
-const API = import.meta.env.VITE_API_URL || '/api';
-const h = () => ({ 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() });
+const API = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
+const h = () => ({ 'x-branch-code': getBranchCode() });
 
 const KGEvaluation = () => {
   const [view, setView] = useState('list');

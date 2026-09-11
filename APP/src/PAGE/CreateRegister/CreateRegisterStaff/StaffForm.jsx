@@ -14,6 +14,7 @@ import FileUpload from '../../../COMPONENTS/FileUpload/FileUpload';
 import Textarea from '../../../COMPONENTS/Textarea/Textarea';
 import Checkbox from '../../../COMPONENTS/Checkbox/Checkbox';
 import Button from '../../../COMPONENTS/Button/Button';
+import { getBranchCode } from '../../../utils/branchCode';
 
 const StaffForm = ({ staffTypeProp, classNameProp, onSuccess }) => {
   const { t } = useTranslation();
@@ -410,10 +411,19 @@ const StaffForm = ({ staffTypeProp, classNameProp, onSuccess }) => {
     const uploadFields = columns.filter(col => col.data_type === 'upload').map(col => col.column_name);
     formDataToSend.append('uploadFields', JSON.stringify(uploadFields));
 
+    // Ensure we have a branch code before submitting
+    const branchCode = getBranchCode();
+    if (!branchCode) {
+      setMessage('❌ No branch code found. Please log in again or select a branch.');
+      setMessageType('error');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      const response = await axios.post('/api/staff/add-staff', formDataToSend, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const headers = { 'X-Branch-Code': branchCode };
+      
+      const response = await axios.post('/api/staff/add-staff', formDataToSend, { headers });
       
       // Handle teacher-specific response data
       if (response.data.teacherData) {
@@ -439,7 +449,13 @@ const StaffForm = ({ staffTypeProp, classNameProp, onSuccess }) => {
       }
       
       if (response.data.userCredentials) {
-        setGeneratedCredentials(response.data.userCredentials);
+        if (response.data.userCredentials.error) {
+          setMessage(`⚠️ Staff saved but account creation failed: ${response.data.userCredentials.error}`);
+          setMessageType('warning');
+          setGeneratedCredentials(null);
+        } else {
+          setGeneratedCredentials(response.data.userCredentials);
+        }
       } else {
         setGeneratedCredentials(null);
       }
@@ -685,7 +701,7 @@ const StaffForm = ({ staffTypeProp, classNameProp, onSuccess }) => {
             onChange={(v) => handleInputChange(fieldName, v)}
             required={isRequired}
             error={validationErrors[fieldName]}
-            placeholder="e.g. +251911234567"
+            placeholder="e.g. +251911234567 or 0911234567"
             helperText="Unique phone number, at least 10 digits"
           />
         </div>

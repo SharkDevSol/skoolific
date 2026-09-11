@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { branchSafeUpload } = require('../middleware/branchContextMiddleware');
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
 const router = express.Router();
 
@@ -326,7 +327,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
 });
 
 // POST /api/chat/conversations/:id/messages - Send message
-router.post('/conversations/:id/messages', upload.array('attachments', 5), async (req, res) => {
+router.post('/conversations/:id/messages', ...branchSafeUpload(upload.array('attachments', 5)), async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;

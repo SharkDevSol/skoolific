@@ -4,7 +4,7 @@ import { FiPlus, FiTrash2, FiUsers, FiUser, FiCheck, FiAlertCircle, FiSearch } f
 import { useApp } from '../../context/AppContext';
 import styles from './TeacherAssignmentManager.module.css';
 
-const API_BASE = `${import.meta.env.VITE_API_URL || '/api'}/evaluation-book`;
+const API_BASE = `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/evaluation-book`;
 
 const TeacherAssignmentManager = () => {
   const { t } = useApp();

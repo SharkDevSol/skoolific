@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://iqrab3.skoolific.com/api';
+const API_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || 'https://iqrab3.skoolific.com/api'));
 
 const AddRetentionBenefitModal = ({ staff, onClose }) => {
   const [retentionBenefitTypes, setRetentionBenefitTypes] = useState([]);

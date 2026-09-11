@@ -36,7 +36,7 @@ const StaffFormBuilder = ({ onSuccess }) => {
   const [optionCount, setOptionCount] = useState(2);
   const [tempOptions, setTempOptions] = useState(['', '']);
 
-  const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers'];
+  const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'];
   
   // Field types with clear distinction
   const fieldTypes = [

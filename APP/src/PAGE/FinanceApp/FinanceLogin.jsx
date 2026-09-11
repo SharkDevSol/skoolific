@@ -1,0 +1,98 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import axios from 'axios';
+import styles from './FinanceApp.module.css';
+
+const FinanceLogin = ({ onLogin }) => {
+  const { t, i18n } = useTranslation();
+  const [branchCode, setBranchCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const baseURL = import.meta.env.VITE_API_URL || '';
+      const response = await axios.post(`${baseURL}/api/finance-app/login`, {
+        branchCode: branchCode.toUpperCase(),
+        username,
+        password
+      });
+
+      if (response.data.success) {
+        const { user, token } = response.data;
+        localStorage.setItem('financeToken', token);
+        localStorage.setItem('financeUser', JSON.stringify(user));
+        // Set auth + branchCode for underlying components that use the api.js interceptor
+        localStorage.setItem('authToken', token);
+        sessionStorage.setItem('branchCode', user.branchCode);
+        localStorage.setItem('isLoggedIn', 'true');
+        if (onLogin) onLogin(user);
+        navigate('/app/finance/');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.error || t('financeApp.shell.login.loginFailed');
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={styles.loginContainer} dir={i18n.dir(i18n.language)}>
+      <div className={styles.loginCard}>
+        <div className={styles.loginHeader}>
+          <img src="/skoolific-icon.png" alt="Logo" className={styles.loginLogo} />
+          <h1>{t('financeApp.shell.login.title')}</h1>
+          <p>{t('financeApp.shell.login.subtitle')}</p>
+        </div>
+        <form onSubmit={handleSubmit} className={styles.loginForm}>
+          <div className={styles.formGroup}>
+            <label>{t('financeApp.shell.login.branchCode')}</label>
+            <input
+              type="text"
+              value={branchCode}
+              onChange={(e) => setBranchCode(e.target.value.toUpperCase())}
+              placeholder={t('financeApp.shell.login.branchPlaceholder')}
+              required
+              autoFocus
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>{t('financeApp.shell.login.username')}</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder={t('financeApp.shell.login.usernamePlaceholder')}
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>{t('financeApp.shell.login.password')}</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t('financeApp.shell.login.passwordPlaceholder')}
+              required
+            />
+          </div>
+          {error && <div className={styles.errorMessage}>{error}</div>}
+          <button type="submit" className={styles.loginButton} disabled={loading}>
+            {loading ? t('financeApp.shell.login.signingIn') : t('financeApp.shell.login.signIn')}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default FinanceLogin;

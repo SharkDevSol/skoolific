@@ -13,6 +13,17 @@ const { requirePermission, FINANCE_PERMISSIONS } = require('../middleware/financ
  */
 router.get('/classes', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS.FEE_STRUCTURES_VIEW), async (req, res) => {
   try {
+    // Ensure school_schema_points schema and classes table exist
+    await pool.query('CREATE SCHEMA IF NOT EXISTS school_schema_points');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS school_schema_points.classes (
+        id SERIAL PRIMARY KEY,
+        class_count INTEGER DEFAULT 0,
+        class_names TEXT[] DEFAULT '{}',
+        custom_fields JSONB DEFAULT '{}'::jsonb,
+        class_configs JSONB DEFAULT '{}'::jsonb
+      )
+    `);
     // Get classes from school_schema_points.classes
     const result = await pool.query(`
       SELECT class_names FROM school_schema_points.classes WHERE id = 1

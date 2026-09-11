@@ -22,7 +22,7 @@
 // ENVIRONMENT CONFIGURATION
 // ===========================================
 
-const ENV = import.meta.env.MODE || 'development';
+const ENV = import.meta.env.MODE || 'production';
 
 /**
  * Base URLs for different environments
@@ -39,7 +39,7 @@ function getAutoBaseURL() {
   if (configured) return configured;
   const envUrl = import.meta.env.VITE_API_URL || '';
   if (envUrl) return envUrl.replace(/\/api\/?$/, '');
-  return 'https://v2.skoolific.com';
+  return '';
 }
 
 const BASE_URLS = {
@@ -613,11 +613,6 @@ export const API_ENDPOINTS = {
     STUDENT_ATTENDANCE: '/api/guardian-student-attendance',
     GUARDIAN_ATTENDANCE: (username) => `/api/guardian-attendance/guardian-attendance/${username}`,
     PAYMENTS: '/api/guardian-payments',
-    NOTIFICATIONS: '/api/guardian-notifications',
-    SEND_ATTENDANCE: '/api/guardian-notifications/send-attendance',
-    SEND_PAYMENTS: '/api/guardian-notifications/send-payments',
-    STATUS: '/api/guardian-notifications/status',
-    TEST_EMAIL: '/api/guardian-notifications/test-email',
   },
 
   // ===========================================
@@ -936,8 +931,8 @@ export function createRequestConfig(options = {}) {
     }
   }
   
-  // Add branch code if available
-  const branchCode = localStorage.getItem('branchCode') || sessionStorage.getItem('branchCode');
+  // Add branch code if available (sessionStorage ONLY for per-tab isolation)
+  const branchCode = sessionStorage.getItem('branchCode') || '';
   if (branchCode) {
     config.headers['X-Branch-Code'] = branchCode;
   }

@@ -116,7 +116,7 @@ router.get('/status', async (req, res) => {
         const staffCheck = await pool.query(`
           SELECT EXISTS (
             SELECT FROM information_schema.tables
-            WHERE table_schema IN ('staff_teaching_staff', 'staff_administrative_staff', 'staff_supportive_staff')
+            WHERE table_schema IN ('staff_teaching_staff', 'staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff', 'staff_finance')
           );
         `);
         taskStatus[3] = staffCheck.rows[0].exists;

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './MonthlyPaymentSettings.module.css';
 import api from '../../utils/api';
-import { getCurrentEthiopianMonth } from '../../utils/ethiopianCalendar';
+import { getCurrentEthiopianMonth, getEthiopianDate } from '../../utils/ethiopianCalendar';
 
 const MonthlyPaymentSettings = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('classes');
   const [loading, setLoading] = useState(false);
   const [feeStructures, setFeeStructures] = useState([]);
@@ -13,15 +15,16 @@ const MonthlyPaymentSettings = () => {
   const [showAddClass, setShowAddClass] = useState(false);
   const [showAddLateFee, setShowAddLateFee] = useState(false);
   const [currentEthiopianDate, setCurrentEthiopianDate] = useState(() => {
-    return getCurrentEthiopianMonth();
+    return getEthiopianDate();
   });
 
   const [classForm, setClassForm] = useState({
-    className: '',
+    selectedClasses: [],
     monthlyFee: '',
-    registrationFee: '', // Added registration fee
+    oldRegistrationFee: '',
+    newRegistrationFee: '',
     description: '',
-    selectedMonths: [] // Array of month numbers (1-12)
+    selectedMonths: []
   });
 
   // Ethiopian calendar months
@@ -146,7 +149,7 @@ const MonthlyPaymentSettings = () => {
         setFeeStructures([]);
         console.log('Fee structures table may not exist yet. Run setup script first.');
       } else {
-        alert('Failed to fetch fee structures');
+        alert(t('financeApp.pset2.failedFetchStructures'));
       }
     } finally {
       setLoading(false);
@@ -165,7 +168,7 @@ const MonthlyPaymentSettings = () => {
         setLateFeeRules([]);
         console.log('Late fee rules table may not exist yet. Run setup script first.');
       } else {
-        alert('Failed to fetch late fee rules');
+        alert(t('financeApp.pset2.failedFetchRules'));
       }
     } finally {
       setLoading(false);
@@ -175,54 +178,83 @@ const MonthlyPaymentSettings = () => {
   const handleAddClass = async (e) => {
     e.preventDefault();
     
-    // Validate we have a default account
     if (!defaultAccount) {
-      alert('No income account found. Please run: node backend/scripts/setup-default-accounts.js');
+      alert(t('financeApp.pset2.noIncomeAccountAlert'));
       return;
     }
 
-    // Validate at least one month is selected
+    if (classForm.selectedClasses.length === 0) {
+      alert(t('financeApp.pset2.selectClassAlert'));
+      return;
+    }
+
     if (classForm.selectedMonths.length === 0) {
-      alert('Please select at least one month');
+      alert(t('financeApp.pset2.selectMonthAlert'));
       return;
     }
 
     try {
-      // Generate academic year UUID based on current year
       const currentYear = new Date().getFullYear();
       const nextYear = currentYear + 1;
       const academicYearName = `${currentYear}-${nextYear}`;
       const academicYearId = '00000000-0000-0000-0000-' + currentYear.toString().padStart(12, '0');
 
-      // Store selected months and registration fee in the description field as JSON
       const monthsData = {
         months: classForm.selectedMonths,
-        description: classForm.description || 'Monthly tuition fee',
-        registrationFee: parseFloat(classForm.registrationFee) || 0
+        description: classForm.description || t('financeApp.pset.monthlyTuitionFeeDesc'),
+        oldRegistrationFee: parseFloat(classForm.oldRegistrationFee) || 0,
+        newRegistrationFee: parseFloat(classForm.newRegistrationFee) || 0
       };
 
-      await api.post('/finance/fee-structures', {
-        name: `${classForm.className} Monthly Fee ${academicYearName}`,
-        academicYearId: academicYearId,
-        gradeLevel: classForm.className,
-        description: JSON.stringify(monthsData), // Store months data here
-        items: [{
-          feeCategory: 'TUITION',
-          amount: parseFloat(classForm.monthlyFee),
-          accountId: defaultAccount.id,
-          paymentType: 'RECURRING',
-          description: classForm.description || 'Monthly tuition fee'
-        }]
-      });
+      let successCount = 0;
+      let failCount = 0;
+      let failReasons = [];
 
-      const firstMonthTotal = parseFloat(classForm.monthlyFee) + parseFloat(classForm.registrationFee);
-      alert(`Class fee structure added successfully!\n\nPayments will be generated for ${classForm.selectedMonths.length} months.\n\nFirst month: ${firstMonthTotal} Birr (${classForm.monthlyFee} + ${classForm.registrationFee} registration)\nOther months: ${classForm.monthlyFee} Birr`);
+      for (const className of classForm.selectedClasses) {
+        try {
+          await api.post('/finance/fee-structures', {
+            name: `${className} Monthly Fee ${academicYearName}`,
+            academicYearId: academicYearId,
+            gradeLevel: className,
+            description: JSON.stringify(monthsData),
+            items: [{
+              feeCategory: 'TUITION',
+              amount: parseFloat(classForm.monthlyFee),
+              accountId: defaultAccount.id,
+              paymentType: 'RECURRING',
+              description: classForm.description || t('financeApp.pset.monthlyTuitionFeeDesc')
+            }]
+          });
+          successCount++;
+        } catch (innerErr) {
+          failCount++;
+          failReasons.push(`${className}: ${innerErr.response?.data?.message || innerErr.message}`);
+        }
+      }
+
+      const oldTotal = parseFloat(classForm.monthlyFee) + parseFloat(classForm.oldRegistrationFee);
+      const newTotal = parseFloat(classForm.monthlyFee) + parseFloat(classForm.newRegistrationFee);
+      let msg = t('financeApp.pset2.classesSuccess', { count: successCount }) + '\n\n';
+      msg += t('financeApp.pset2.feeLine', { amount: classForm.monthlyFee });
+      if (parseFloat(classForm.oldRegistrationFee) > 0 || parseFloat(classForm.newRegistrationFee) > 0) {
+        msg += '\n' + t('financeApp.pset2.oldRegLine', { amount: classForm.oldRegistrationFee || 0 });
+        msg += '\n' + t('financeApp.pset2.newRegLine', { amount: classForm.newRegistrationFee || 0 });
+      }
+      msg += '\n' + t('financeApp.pset2.monthsLine', { count: classForm.selectedMonths.length }) + '\n';
+      msg += '\n' + t('financeApp.pset2.firstMonthOld', { amount: oldTotal });
+      msg += '\n' + t('financeApp.pset2.firstMonthNew', { amount: newTotal });
+      
+      if (failCount > 0) {
+        msg += '\n\n' + t('financeApp.pset2.classesFailed', { count: failCount }) + '\n' + failReasons.join('\n');
+      }
+      
+      alert(msg);
       setShowAddClass(false);
-      setClassForm({ className: '', monthlyFee: '', registrationFee: '', description: '', selectedMonths: [] });
+      setClassForm({ selectedClasses: [], monthlyFee: '', oldRegistrationFee: '', newRegistrationFee: '', description: '', selectedMonths: [] });
       fetchFeeStructures();
     } catch (error) {
       console.error('Error adding class:', error);
-      const errorMsg = error.response?.data?.message || 'Failed to add class fee structure';
+      const errorMsg = error.response?.data?.message || t('financeApp.pset2.failedAddClass');
       const errorDetails = error.response?.data?.details;
       
       if (errorDetails && Array.isArray(errorDetails)) {
@@ -246,7 +278,7 @@ const MonthlyPaymentSettings = () => {
         isActive: true
       });
 
-      alert('Late fee rule added successfully!');
+      alert(t('financeApp.pset2.ruleAdded'));
       setShowAddLateFee(false);
       setLateFeeForm({
         name: '',
@@ -258,7 +290,7 @@ const MonthlyPaymentSettings = () => {
       fetchLateFeeRules();
     } catch (error) {
       console.error('Error adding late fee rule:', error);
-      const errorMsg = error.response?.data?.message || 'Failed to add late fee rule';
+      const errorMsg = error.response?.data?.message || t('financeApp.pset2.failedAddRule');
       const errorDetails = error.response?.data?.details;
       
       if (errorDetails && Array.isArray(errorDetails)) {
@@ -283,47 +315,47 @@ const MonthlyPaymentSettings = () => {
         });
         fetchLateFeeRules();
       }
-      alert('Status updated successfully!');
+      alert(t('financeApp.pset2.statusUpdated'));
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status');
+      alert(t('financeApp.pset2.failedUpdateStatus'));
     }
   };
 
   const handleDeleteFeeStructure = async (id, className) => {
-    if (!confirm(`Are you sure you want to delete the fee structure for ${className}?\n\nThis action cannot be undone.`)) {
+    if (!confirm(t('financeApp.pset2.confirmDeleteStructure', { className }))) {
       return;
     }
 
     try {
       await api.delete(`/finance/fee-structures/${id}`);
-      alert('Fee structure deleted successfully!');
+      alert(t('financeApp.pset2.structureDeleted'));
       fetchFeeStructures();
     } catch (error) {
       console.error('Error deleting fee structure:', error);
-      const errorMsg = error.response?.data?.message || 'Failed to delete fee structure';
+      const errorMsg = error.response?.data?.message || t('financeApp.pset2.failedDeleteStructure');
       alert(errorMsg);
     }
   };
 
   const handleDeleteLateFeeRule = async (id, ruleName) => {
-    if (!confirm(`Are you sure you want to delete the late fee rule "${ruleName}"?\n\nThis action cannot be undone.`)) {
+    if (!confirm(t('financeApp.pset2.confirmDeleteRule', { ruleName }))) {
       return;
     }
 
     try {
       await api.delete(`/finance/late-fee-rules/${id}`);
-      alert('Late fee rule deleted successfully!');
+      alert(t('financeApp.pset2.ruleDeleted'));
       fetchLateFeeRules();
     } catch (error) {
       console.error('Error deleting late fee rule:', error);
-      const errorMsg = error.response?.data?.message || 'Failed to delete late fee rule';
+      const errorMsg = error.response?.data?.message || t('financeApp.pset2.failedDeleteRule');
       alert(errorMsg);
     }
   };
 
   const handleApplyLateFees = async () => {
-    if (!confirm('Apply late fees to all overdue invoices?\n\nThis will add late fees to students who are past the grace period.')) {
+    if (!confirm(t('financeApp.pset2.confirmApplyLateFees'))) {
       return;
     }
 
@@ -332,13 +364,13 @@ const MonthlyPaymentSettings = () => {
       const { appliedCount, results } = response.data;
       
       if (appliedCount === 0) {
-        alert('No late fees applied. All invoices are either paid or within grace period.');
+        alert(t('financeApp.pset2.noLateFeesApplied'));
       } else {
-        alert(`✅ Late fees applied successfully!\n\n${appliedCount} invoices received late fees.\n\nRefresh the Monthly Payments page to see updated balances.`);
+        alert(t('financeApp.pset2.lateFeesApplied', { count: appliedCount }));
       }
     } catch (error) {
       console.error('Error applying late fees:', error);
-      alert('Failed to apply late fees: ' + (error.response?.data?.message || error.message));
+      alert(t('financeApp.pset2.failedApplyLateFees') + (error.response?.data?.message || error.message));
     }
   };
 
@@ -348,10 +380,10 @@ const MonthlyPaymentSettings = () => {
       // Store settings in localStorage for now
       // In production, this would be saved to the backend
       localStorage.setItem('financeGeneralSettings', JSON.stringify(generalSettings));
-      alert('✅ Settings saved successfully!');
+      alert(t('financeApp.pset2.settingsSaved'));
     } catch (error) {
       console.error('Error saving settings:', error);
-      alert('Failed to save settings');
+      alert(t('financeApp.pset2.failedSaveSettings'));
     } finally {
       setSavingSettings(false);
     }
@@ -374,7 +406,7 @@ const MonthlyPaymentSettings = () => {
     try {
       // Validate fee structure has required data
       if (!feeStructure || !feeStructure.id) {
-        alert('Invalid fee structure. Please refresh the page and try again.');
+        alert(t('financeApp.pset2.invalidStructure'));
         setGeneratingInvoices(false);
         return;
       }
@@ -382,7 +414,10 @@ const MonthlyPaymentSettings = () => {
       // Parse months data to show in confirmation
       let selectedMonths = [];
       try {
-        const monthsData = JSON.parse(feeStructure.description || '{}');
+        let desc = feeStructure.description || '{}';
+        // Decode HTML entities if present (e.g. &quot; -> ")
+        desc = desc.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+        const monthsData = JSON.parse(desc);
         selectedMonths = monthsData.months || [];
       } catch (error) {
         console.error('Error parsing months data:', error);
@@ -395,7 +430,12 @@ const MonthlyPaymentSettings = () => {
 
       const monthsList = selectedMonths.map(m => ethiopianMonthNames[m - 1]).join(', ');
 
-      if (!confirm(`Generate invoices for ALL ${selectedMonths.length} months for ${feeStructure.gradeLevel}?\n\nMonths: ${monthsList}\n\nThis will create ${selectedMonths.length} invoices for each student.\n\nBalance will accumulate automatically:\n- Month 1: 1,300 Birr\n- Month 2: 2,600 Birr (if Month 1 unpaid)\n- Month 3: 4,000 Birr (if Months 1-2 unpaid + late fees)\n\nContinue?`)) {
+      if (!confirm(t('financeApp.pset2.generateConfirm', {
+        count: selectedMonths.length,
+        grade: feeStructure.gradeLevel,
+        months: monthsList,
+        invoices: selectedMonths.length
+      }))) {
         setGeneratingInvoices(false);
         return;
       }
@@ -407,31 +447,33 @@ const MonthlyPaymentSettings = () => {
 
       const result = response.data.data;
 
-      let message = `✅ All invoices generated successfully!\n\n`;
-      message += `Total Months: ${result.totalMonths}\n`;
-      message += `New Students: ${result.summary.newStudents}\n`;
+      let message = t('financeApp.pset2.generatedSuccess');
+      message += t('financeApp.pset2.totalMonthsLine', { count: result.totalMonths });
+      message += t('financeApp.pset2.newStudentsLine', { count: result.summary.newStudents });
       if (result.summary.existingStudents > 0) {
-        message += `Students with Existing Invoices: ${result.summary.existingStudents}\n`;
+        message += t('financeApp.pset2.existingInvoicesLine', { count: result.summary.existingStudents });
       }
-      message += `Total Invoices Created: ${result.totalInvoices}\n`;
-      message += `Monthly Fee: ${result.summary.monthlyFee} Birr\n`;
-      if (result.summary.registrationFee > 0) {
-        message += `Registration Fee: ${result.summary.registrationFee} Birr\n`;
-        message += `First Month Total: ${result.summary.firstMonthTotal} Birr\n`;
+      message += t('financeApp.pset2.totalInvoicesLine', { count: result.totalInvoices });
+      message += t('financeApp.pset2.monthlyFeeLine', { amount: result.summary.monthlyFee });
+      if (result.summary.oldRegistrationFee > 0 || result.summary.newRegistrationFee > 0) {
+        message += t('financeApp.pset2.oldRegFeeLine', { amount: result.summary.oldRegistrationFee });
+        message += t('financeApp.pset2.newRegFeeLine', { amount: result.summary.newRegistrationFee });
+        message += t('financeApp.pset2.firstMonthOldRate', { amount: result.summary.firstMonthOldTotal });
+        message += t('financeApp.pset2.firstMonthNewRate', { amount: result.summary.firstMonthNewTotal });
+        message += t('financeApp.pset2.chooseOldNew');
       }
-      message += `Total per Student: ${result.summary.totalPerStudent} Birr\n\n`;
-      message += `📊 Monthly Breakdown:\n`;
+      message += t('financeApp.pset2.totalPerStudentLine', { amount: result.summary.totalPerStudent });
+      message += t('financeApp.pset2.monthlyBreakdown');
       
       result.monthlyResults.slice(0, 5).forEach(month => {
-        message += `- ${month.monthName}: ${month.successCount} invoices\n`;
+        message += t('financeApp.pset2.invoiceBullet', { monthName: month.monthName, count: month.successCount }) + '\n';
       });
       
       if (result.monthlyResults.length > 5) {
-        message += `... and ${result.monthlyResults.length - 5} more months\n`;
+        message += t('financeApp.pset2.moreMonths', { count: result.monthlyResults.length - 5 }) + '\n';
       }
       
-      message += `\n💡 Balance Accumulation:\n`;
-      message += `Unpaid amounts will automatically accumulate each month with late fees applied to overdue invoices.`;
+      message += t('financeApp.pset2.balanceNote');
 
       alert(message);
       
@@ -444,20 +486,20 @@ const MonthlyPaymentSettings = () => {
       const errorDetails = error.response?.data?.details;
       
       // More detailed error message
-      let fullErrorMsg = `Failed to generate invoices:\n\n${errorMsg}`;
+      let fullErrorMsg = t('financeApp.pset2.generateFailed') + errorMsg;
       
       if (errorDetails) {
-        fullErrorMsg += `\n\nDetails: ${errorDetails}`;
+        fullErrorMsg += t('financeApp.pset2.detailsColon') + errorDetails;
       }
       
       // Add helpful hints based on error type
       if (errorMsg.includes('No months configured')) {
-        fullErrorMsg += '\n\n💡 Hint: This fee structure has no months selected. Please delete it and create a new one with months selected.';
+        fullErrorMsg += t('financeApp.pset2.hintNoMonths');
       } else if (errorMsg.includes('No students found')) {
-        fullErrorMsg += '\n\n💡 Hint: There are no students in this class. Please add students first.';
+        fullErrorMsg += t('financeApp.pset2.hintNoStudents');
       } else if (errorMsg.includes('already generated')) {
         // Ask if user wants to regenerate
-        const shouldRegenerate = confirm(fullErrorMsg + '\n\n⚠️ Do you want to DELETE existing invoices and regenerate them?\n\nWARNING: This will delete all existing invoices and payments for this fee structure!');
+        const shouldRegenerate = confirm(fullErrorMsg + t('financeApp.pset2.regenerateConfirm'));
         
         if (shouldRegenerate) {
           // Retry with regenerate flag
@@ -469,32 +511,32 @@ const MonthlyPaymentSettings = () => {
 
             const result = response.data.data;
 
-            let message = `✅ Invoices regenerated successfully!\n\n`;
-            message += `⚠️ All previous invoices and payments were deleted\n\n`;
-            message += `Total Months: ${result.totalMonths}\n`;
-            message += `Total Students: ${result.summary.newStudents}\n`;
-            message += `Total Invoices Created: ${result.totalInvoices}\n`;
-            message += `Monthly Fee: ${result.summary.monthlyFee} Birr\n`;
+            let message = t('financeApp.pset2.regeneratedSuccess');
+            message += t('financeApp.pset2.previousDeleted');
+            message += t('financeApp.pset2.totalMonthsLine', { count: result.totalMonths });
+            message += t('financeApp.pset2.regTotalStudents', { count: result.summary.newStudents });
+            message += t('financeApp.pset2.totalInvoicesLine', { count: result.totalInvoices });
+            message += t('financeApp.pset2.monthlyFeeLine', { amount: result.summary.monthlyFee });
             if (result.summary.registrationFee > 0) {
-              message += `Registration Fee: ${result.summary.registrationFee} Birr\n`;
-              message += `First Month Total: ${result.summary.firstMonthTotal} Birr\n`;
+              message += t('financeApp.pset2.regRegistrationFee', { amount: result.summary.registrationFee });
+              message += t('financeApp.pset2.firstMonthTotal', { amount: result.summary.firstMonthTotal });
             }
-            message += `Total per Student: ${result.summary.totalPerStudent} Birr\n\n`;
-            message += `📊 Monthly Breakdown:\n`;
+            message += t('financeApp.pset2.totalPerStudentLine', { amount: result.summary.totalPerStudent });
+            message += t('financeApp.pset2.monthlyBreakdown');
             
             result.monthlyResults.slice(0, 5).forEach(month => {
-              message += `- ${month.monthName}: ${month.successCount} invoices\n`;
+              message += t('financeApp.pset2.invoiceBullet', { monthName: month.monthName, count: month.successCount }) + '\n';
             });
             
             if (result.monthlyResults.length > 5) {
-              message += `... and ${result.monthlyResults.length - 5} more months\n`;
+              message += t('financeApp.pset2.moreMonths', { count: result.monthlyResults.length - 5 }) + '\n';
             }
 
             alert(message);
             fetchFeeStructures();
           } catch (regenerateError) {
             console.error('Error regenerating invoices:', regenerateError);
-            alert(`Failed to regenerate invoices: ${regenerateError.response?.data?.message || regenerateError.message}`);
+            alert(t('financeApp.pset2.regFailed') + (regenerateError.response?.data?.message || regenerateError.message));
           }
         }
         return; // Exit early, don't show the error alert again
@@ -510,8 +552,8 @@ const MonthlyPaymentSettings = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div>
-          <h1>Monthly Payment Settings</h1>
-          <p>Configure monthly fees, late fees, and payment rules</p>
+          <h1>{t('financeApp.pset.title')}</h1>
+          <p>{t('financeApp.pset.subtitle')}</p>
           <div style={{ 
             marginTop: '10px', 
             padding: '8px 15px', 
@@ -522,7 +564,7 @@ const MonthlyPaymentSettings = () => {
             fontSize: '0.9em',
             fontWeight: '500'
           }}>
-            📅 Current Ethiopian Date: {currentEthiopianDate.day} {currentEthiopianDate.monthName} {currentEthiopianDate.year}
+            {t('financeApp.pset.currentEthiopianDate')}{currentEthiopianDate.day} {currentEthiopianDate.monthName} {currentEthiopianDate.year}
           </div>
         </div>
       </div>
@@ -532,55 +574,57 @@ const MonthlyPaymentSettings = () => {
           className={`${styles.tab} ${activeTab === 'classes' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('classes')}
         >
-          Class Fees
+          {t('financeApp.pset.tabClassFees')}
         </button>
         <button
           className={`${styles.tab} ${activeTab === 'latefees' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('latefees')}
         >
-          Late Fees
+          {t('financeApp.pset.tabLateFees')}
         </button>
         <button
           className={`${styles.tab} ${activeTab === 'general' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('general')}
         >
-          General Settings
+          {t('financeApp.pset.tabGeneral')}
         </button>
       </div>
 
-      {loading && <div className={styles.loading}>Loading...</div>}
+      {loading && <div className={styles.loading}>{t('financeApp.pset.loading')}</div>}
 
       {/* Class Fees Tab */}
       {activeTab === 'classes' && !loading && (
         <div className={styles.tabContent}>
           <div className={styles.sectionHeader}>
-            <h2>Class Monthly Fees</h2>
+            <h2>{t('financeApp.pset.classMonthlyFees')}</h2>
             <button 
               className={styles.addButton}
               onClick={() => setShowAddClass(true)}
             >
-              + Add Class Fee
+              {t('financeApp.pset.addClassFee')}
             </button>
           </div>
 
           <div className={styles.cardGrid}>
             {feeStructures.length === 0 ? (
               <div className={styles.emptyState}>
-                <h3>No Class Fees Configured</h3>
-                <p>Click "+ Add Class Fee" to add your first class fee structure.</p>
-                <p className={styles.hint}>💡 Tip: Run the setup script first if you haven't already:</p>
+                <h3>{t('financeApp.pset.noClassFees')}</h3>
+                <p>{t('financeApp.pset.noClassFeesHint')}</p>
+                <p className={styles.hint}>{t('financeApp.pset.setupTip')}</p>
                 <code>cd backend && node scripts/setup-monthly-payments.js</code>
               </div>
             ) : (
               feeStructures.map((structure) => {
                 // Parse months data
                 let selectedMonths = [];
-                let monthsDescription = '';
-                try {
-                  const monthsData = JSON.parse(structure.description || '{}');
-                  selectedMonths = monthsData.months || [];
-                  monthsDescription = monthsData.description || '';
-                } catch (error) {
+                  let monthsDescription = '';
+                  try {
+                    let desc = structure.description || '{}';
+                    desc = desc.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+                    const monthsData = JSON.parse(desc);
+                    selectedMonths = monthsData.months || [];
+                    monthsDescription = monthsData.description || '';
+                  } catch (error) {
                   // If parsing fails, it's an old structure without months data
                 }
 
@@ -590,7 +634,7 @@ const MonthlyPaymentSettings = () => {
                 ];
                 const monthsText = selectedMonths.length > 0 
                   ? selectedMonths.map(m => ethiopianMonthNames[m - 1]).join(', ')
-                  : 'All months';
+                  : t('financeApp.pset.allMonths');
 
                 return (
                   <div key={structure.id} className={styles.card}>
@@ -608,7 +652,7 @@ const MonthlyPaymentSettings = () => {
                         <button
                           className={styles.deleteButton}
                           onClick={() => handleDeleteFeeStructure(structure.id, structure.gradeLevel || structure.name)}
-                          title="Delete fee structure"
+                          title={t('financeApp.pset.deleteFeeTitle')}
                         >
                           🗑️
                         </button>
@@ -616,14 +660,14 @@ const MonthlyPaymentSettings = () => {
                     </div>
                     <div className={styles.cardBody}>
                       <div className={styles.feeAmount}>
-                        ${structure.items?.[0]?.amount || 0}/month
+                        ${structure.items?.[0]?.amount || 0}{t('financeApp.pset.perMonth')}
                       </div>
                       <div className={styles.cardDetails}>
-                        <p><strong>Academic Year:</strong> {structure.academicYearId}</p>
-                        <p><strong>Status:</strong> {structure.isActive ? '✓ Active' : '✗ Inactive'}</p>
+                        <p><strong>{t('financeApp.pset.academicYear')}</strong> {structure.academicYearId}</p>
+                        <p><strong>{t('financeApp.pset.statusColon')}</strong> {structure.isActive ? t('financeApp.pset.active') : t('financeApp.pset.inactive')}</p>
                         {selectedMonths.length > 0 && (
                           <>
-                            <p><strong>Payment Months:</strong> {selectedMonths.length} months</p>
+                            <p><strong>{t('financeApp.pset.paymentMonths')}</strong> {selectedMonths.length} {t('financeApp.pset.monthsWord')}</p>
                             <p className={styles.monthsList}>{monthsText}</p>
                           </>
                         )}
@@ -633,7 +677,7 @@ const MonthlyPaymentSettings = () => {
                         onClick={() => handleGenerateInvoices(structure)}
                         disabled={generatingInvoices || !structure.isActive}
                       >
-                        {generatingInvoices ? '⏳ Generating...' : '📄 Generate All Months'}
+                        {generatingInvoices ? t('financeApp.pset.generating') : t('financeApp.pset.generateAllMonths')}
                       </button>
                     </div>
                   </div>
@@ -645,71 +689,102 @@ const MonthlyPaymentSettings = () => {
           {showAddClass && (
             <div className={styles.modal}>
               <div className={styles.modalContent}>
-                <h2>Add Class Fee Structure</h2>
+                <h2>{t('financeApp.pset.addStructure')}</h2>
                 
                 {!defaultAccount && (
                   <div className={styles.warningBox}>
-                    <strong>⚠️ Setup Required</strong>
-                    <p>No income account found. Please run the setup script first:</p>
+                    <strong>{t('financeApp.pset.setupRequired')}</strong>
+                    <p>{t('financeApp.pset.noIncomeAccount')}</p>
                     <code>cd backend && node scripts/setup-default-accounts.js</code>
                   </div>
                 )}
                 
                 <form onSubmit={handleAddClass}>
                   <div className={styles.formGroup}>
-                    <label>Class Name *</label>
-                    <select
-                      value={classForm.className}
-                      onChange={(e) => setClassForm({...classForm, className: e.target.value})}
-                      required
-                      disabled={!defaultAccount}
-                    >
-                      <option value="">-- Select a Class --</option>
+                    <label>{t('financeApp.pset.selectClasses')} <span style={{fontSize:'0.8em',color:'#666'}}>{t('financeApp.pset.chooseOneOrMore')}</span></label>
+                    <div className={styles.monthGrid}>
                       {availableClasses.map((cls) => (
-                        <option key={cls.value} value={cls.value}>
-                          {cls.name}
-                        </option>
+                        <label key={cls.value} className={styles.monthCheckbox}>
+                          <input
+                            type="checkbox"
+                            checked={classForm.selectedClasses.includes(cls.value)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setClassForm({
+                                  ...classForm,
+                                  selectedClasses: [...classForm.selectedClasses, cls.value]
+                                });
+                              } else {
+                                setClassForm({
+                                  ...classForm,
+                                  selectedClasses: classForm.selectedClasses.filter(c => c !== cls.value)
+                                });
+                              }
+                            }}
+                            disabled={!defaultAccount}
+                          />
+                          <span>{cls.name}</span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
                     <small className={styles.hint}>
-                      Select from existing classes in your school
+                      {classForm.selectedClasses.length > 0 
+                        ? t('financeApp.pset.classesSelected', { count: classForm.selectedClasses.length })
+                        : t('financeApp.pset.selectClassesHint')}
                     </small>
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Monthly Fee Amount *</label>
+                    <label>{t('financeApp.pset.monthlyFeeAmount')}</label>
                     <input
                       type="number"
                       step="0.01"
                       value={classForm.monthlyFee}
                       onChange={(e) => setClassForm({...classForm, monthlyFee: e.target.value})}
-                      placeholder="e.g., 1300"
+                      placeholder={t('financeApp.pset.monthlyFeePh')}
                       required
                       disabled={!defaultAccount}
                     />
                     <small className={styles.hint}>
-                      This amount will be charged every month
+                      {t('financeApp.pset.chargedMonthly')}
                     </small>
                   </div>
 
-                  <div className={styles.formGroup}>
-                    <label>Registration Fee Amount *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={classForm.registrationFee}
-                      onChange={(e) => setClassForm({...classForm, registrationFee: e.target.value})}
-                      placeholder="e.g., 200"
-                      required
-                      disabled={!defaultAccount}
-                    />
-                    <small className={styles.hint}>
-                      This will be added to the first month only (e.g., 1300 + 200 = 1500 for first month)
-                    </small>
+                  <div className={styles.formRow}>
+                    <div className={styles.formGroup}>
+                      <label>{t('financeApp.pset.oldRegFee')}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={classForm.oldRegistrationFee}
+                        onChange={(e) => setClassForm({...classForm, oldRegistrationFee: e.target.value})}
+                        placeholder={t('financeApp.pset.oldRegPh')}
+                        required
+                        disabled={!defaultAccount}
+                      />
+                      <small className={styles.hint}>
+                        {t('financeApp.pset.oldRegHint')}
+                      </small>
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>{t('financeApp.pset.newRegFee')}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={classForm.newRegistrationFee}
+                        onChange={(e) => setClassForm({...classForm, newRegistrationFee: e.target.value})}
+                        placeholder={t('financeApp.pset.newRegPh')}
+                        required
+                        disabled={!defaultAccount}
+                      />
+                      <small className={styles.hint}>
+                        {t('financeApp.pset.newRegHint')}
+                      </small>
+                    </div>
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Select Months for Payment *</label>
+                    <label>{t('financeApp.pset.selectMonths')}</label>
                     <div className={styles.infoBox} style={{ 
                       background: '#e3f2fd', 
                       padding: '10px', 
@@ -717,9 +792,9 @@ const MonthlyPaymentSettings = () => {
                       marginBottom: '10px',
                       fontSize: '0.9em'
                     }}>
-                      <strong>📅 Current Month:</strong> {currentEthiopianDate.monthName} (Month {currentEthiopianDate.month})
+                      <strong>{t('financeApp.pset.currentMonth')}</strong> {currentEthiopianDate.monthName} ({t('financeApp.pset.monthWord')} {currentEthiopianDate.month})
                       <br />
-                      <small>Students can pay up to the current month. Future months are locked.</small>
+                      <small>{t('financeApp.pset.monthsNote')}</small>
                     </div>
                     <div className={styles.monthGrid}>
                       {months.map((month) => {
@@ -761,19 +836,19 @@ const MonthlyPaymentSettings = () => {
                     </div>
                     <small className={styles.hint}>
                       {classForm.selectedMonths.length > 0 
-                        ? `${classForm.selectedMonths.length} month(s) selected` 
-                        : 'Select the months when students should pay'}
+                        ? t('financeApp.pset.monthsSelected', { count: classForm.selectedMonths.length }) 
+                        : t('financeApp.pset.selectMonthsHint')}
                       <br />
-                      <strong>Note:</strong> Months marked with ✓ are unlocked (past or current). Months with 🔒 are future months.
+                      <strong>{t('financeApp.pset.noteColon')}</strong> {t('financeApp.pset.monthsUnlockNote')}
                     </small>
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Description</label>
+                    <label>{t('financeApp.pset.description')}</label>
                     <textarea
                       value={classForm.description}
                       onChange={(e) => setClassForm({...classForm, description: e.target.value})}
-                      placeholder="Optional description"
+                      placeholder={t('financeApp.pset.descriptionPh')}
                       rows="3"
                       disabled={!defaultAccount}
                     />
@@ -785,14 +860,14 @@ const MonthlyPaymentSettings = () => {
                       className={styles.submitButton}
                       disabled={!defaultAccount}
                     >
-                      Add Class Fee
+                      {t('financeApp.pset.addClassFeeButton')}
                     </button>
                     <button 
                       type="button" 
                       className={styles.cancelButton}
                       onClick={() => setShowAddClass(false)}
                     >
-                      Cancel
+                      {t('financeApp.pset.cancel')}
                     </button>
                   </div>
                 </form>
@@ -806,21 +881,21 @@ const MonthlyPaymentSettings = () => {
       {activeTab === 'latefees' && !loading && (
         <div className={styles.tabContent}>
           <div className={styles.sectionHeader}>
-            <h2>Late Fee Rules</h2>
+            <h2>{t('financeApp.pset.lateFeeRules')}</h2>
             <div className={styles.headerButtons}>
               <button 
                 className={styles.applyButton}
                 onClick={handleApplyLateFees}
               >
-                ⚡ Apply Late Fees Now
+                {t('financeApp.pset.applyLateFees')}
               </button>
               <button 
                 className={styles.addButton}
                 onClick={() => setShowAddLateFee(true)}
                 disabled={lateFeeRules.length >= 2}
-                title={lateFeeRules.length >= 2 ? 'Maximum 2 late fee rules allowed' : 'Add a new late fee rule'}
+                title={lateFeeRules.length >= 2 ? t('financeApp.pset.maxLateRules') : t('financeApp.pset.addLateRuleTitle')}
               >
-                + Add Late Fee Rule {lateFeeRules.length >= 2 && '(Max 2)'}
+                {t('financeApp.pset.addLateRule')} {lateFeeRules.length >= 2 && t('financeApp.pset.max2')}
               </button>
             </div>
           </div>
@@ -828,34 +903,34 @@ const MonthlyPaymentSettings = () => {
           <div className={styles.tableContainer}>
             {lateFeeRules.length === 0 ? (
               <div className={styles.emptyState}>
-                <h3>No Late Fee Rules Configured</h3>
-                <p>Click "+ Add Late Fee Rule" to add your first late fee rule.</p>
-                <p className={styles.hint}>💡 Late fees are optional but help encourage timely payments.</p>
+                <h3>{t('financeApp.pset.noLateRules')}</h3>
+                <p>{t('financeApp.pset.noLateRulesHint')}</p>
+                <p className={styles.hint}>{t('financeApp.pset.lateFeesTip')}</p>
               </div>
             ) : (
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>Rule Name</th>
-                    <th>Grace Period</th>
-                    <th>Penalty Type</th>
-                    <th>Penalty Value</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th>{t('financeApp.pset.thRuleName')}</th>
+                    <th>{t('financeApp.pset.thGracePeriod')}</th>
+                    <th>{t('financeApp.pset.thPenaltyType')}</th>
+                    <th>{t('financeApp.pset.thPenaltyValue')}</th>
+                    <th>{t('financeApp.pset.thStatus')}</th>
+                    <th>{t('financeApp.pset.thActions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lateFeeRules.map((rule) => (
                     <tr key={rule.id}>
                       <td>{rule.name}</td>
-                      <td>{rule.gracePeriodDays} days</td>
+                      <td>{rule.gracePeriodDays} {t('financeApp.pset.days')}</td>
                       <td>{rule.type}</td>
                       <td>
                         {rule.type === 'PERCENTAGE' ? `${rule.value}%` : `$${rule.value}`}
                       </td>
                       <td>
                         <span className={rule.isActive ? styles.statusActive : styles.statusInactive}>
-                          {rule.isActive ? 'Active' : 'Inactive'}
+                          {rule.isActive ? t('financeApp.pset.active') : t('financeApp.pset.inactive')}
                         </span>
                       </td>
                       <td>
@@ -871,9 +946,9 @@ const MonthlyPaymentSettings = () => {
                           <button
                             className={styles.deleteButton}
                             onClick={() => handleDeleteLateFeeRule(rule.id, rule.name)}
-                            title="Delete Rule"
+                            title={t('financeApp.pset.deleteRuleTitle')}
                           >
-                            🗑️ Delete
+                            {t('financeApp.pset.deleteShort')}
                           </button>
                         </div>
                       </td>
@@ -887,64 +962,64 @@ const MonthlyPaymentSettings = () => {
           {showAddLateFee && (
             <div className={styles.modal}>
               <div className={styles.modalContent}>
-                <h2>Add Late Fee Rule</h2>
+                <h2>{t('financeApp.pset.addRuleStructure')}</h2>
                 <form onSubmit={handleAddLateFee}>
                   <div className={styles.formGroup}>
-                    <label>Rule Name *</label>
+                    <label>{t('financeApp.pset.ruleName')}</label>
                     <input
                       type="text"
                       value={lateFeeForm.name}
                       onChange={(e) => setLateFeeForm({...lateFeeForm, name: e.target.value})}
-                      placeholder="e.g., Standard Late Fee"
+                      placeholder={t('financeApp.pset.ruleNamePh')}
                       required
                     />
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Grace Period (Days) *</label>
+                    <label>{t('financeApp.pset.graceDays')}</label>
                     <input
                       type="number"
                       value={lateFeeForm.gracePeriodDays}
                       onChange={(e) => setLateFeeForm({...lateFeeForm, gracePeriodDays: e.target.value})}
-                      placeholder="e.g., 5"
+                      placeholder={t('financeApp.pset.graceDaysPh')}
                       required
                     />
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Penalty Type *</label>
+                    <label>{t('financeApp.pset.penaltyType')}</label>
                     <select
                       value={lateFeeForm.penaltyType}
                       onChange={(e) => setLateFeeForm({...lateFeeForm, penaltyType: e.target.value})}
                       required
                     >
-                      <option value="FIXED_AMOUNT">Fixed Amount</option>
-                      <option value="PERCENTAGE">Percentage</option>
+                      <option value="FIXED_AMOUNT">{t('financeApp.pset.fixedAmount')}</option>
+                      <option value="PERCENTAGE">{t('financeApp.pset.percentage')}</option>
                     </select>
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Penalty Value *</label>
+                    <label>{t('financeApp.pset.penaltyValue')}</label>
                     <input
                       type="number"
                       step="0.01"
                       value={lateFeeForm.penaltyValue}
                       onChange={(e) => setLateFeeForm({...lateFeeForm, penaltyValue: e.target.value})}
-                      placeholder={lateFeeForm.penaltyType === 'PERCENTAGE' ? 'e.g., 5 (for 5%)' : 'e.g., 50'}
+                      placeholder={lateFeeForm.penaltyType === 'PERCENTAGE' ? t('financeApp.pset.percentagePh') : t('financeApp.pset.fixedPh')}
                       required
                     />
                   </div>
 
                   <div className={styles.modalActions}>
                     <button type="submit" className={styles.submitButton}>
-                      Add Late Fee Rule
+                      {t('financeApp.pset.addRuleStructure')}
                     </button>
                     <button 
                       type="button" 
                       className={styles.cancelButton}
                       onClick={() => setShowAddLateFee(false)}
                     >
-                      Cancel
+                      {t('financeApp.pset.cancel')}
                     </button>
                   </div>
                 </form>
@@ -957,10 +1032,10 @@ const MonthlyPaymentSettings = () => {
       {/* General Settings Tab */}
       {activeTab === 'general' && (
         <div className={styles.tabContent}>
-          <h2>General Payment Settings</h2>
+          <h2>{t('financeApp.pset.generalTitle')}</h2>
           
           <div className={styles.settingsSection}>
-            <h3>Payment Methods</h3>
+            <h3>{t('financeApp.pset.paymentMethods')}</h3>
             <div className={styles.checkboxGroup}>
               <label>
                 <input 
@@ -970,7 +1045,7 @@ const MonthlyPaymentSettings = () => {
                     ...generalSettings,
                     paymentMethods: { ...generalSettings.paymentMethods, cash: e.target.checked }
                   })}
-                /> Cash
+                /> {t('financeApp.pset.cash')}
               </label>
               <label>
                 <input 
@@ -980,7 +1055,7 @@ const MonthlyPaymentSettings = () => {
                     ...generalSettings,
                     paymentMethods: { ...generalSettings.paymentMethods, bankTransfer: e.target.checked }
                   })}
-                /> Bank Transfer
+                /> {t('financeApp.pset.bankTransfer')}
               </label>
               <label>
                 <input 
@@ -990,7 +1065,7 @@ const MonthlyPaymentSettings = () => {
                     ...generalSettings,
                     paymentMethods: { ...generalSettings.paymentMethods, mobileMoney: e.target.checked }
                   })}
-                /> Mobile Money
+                /> {t('financeApp.pset.mobileMoney')}
               </label>
               <label>
                 <input 
@@ -1000,15 +1075,15 @@ const MonthlyPaymentSettings = () => {
                     ...generalSettings,
                     paymentMethods: { ...generalSettings.paymentMethods, onlinePayment: e.target.checked }
                   })}
-                /> Online Payment
+                /> {t('financeApp.pset.onlinePayment')}
               </label>
             </div>
           </div>
 
           <div className={styles.settingsSection}>
-            <h3>Invoice Settings</h3>
+            <h3>{t('financeApp.pset.invoiceSettings')}</h3>
             <div className={styles.formGroup}>
-              <label>Default Due Date (Days from issue)</label>
+              <label>{t('financeApp.pset.defaultDueDate')}</label>
               <input 
                 type="number" 
                 value={generalSettings.invoiceSettings.defaultDueDays}
@@ -1019,7 +1094,7 @@ const MonthlyPaymentSettings = () => {
               />
             </div>
             <div className={styles.formGroup}>
-              <label>Invoice Prefix</label>
+              <label>{t('financeApp.pset.invoicePrefix')}</label>
               <input 
                 type="text" 
                 value={generalSettings.invoiceSettings.invoicePrefix}
@@ -1032,7 +1107,7 @@ const MonthlyPaymentSettings = () => {
           </div>
 
           <div className={styles.settingsSection}>
-            <h3>Notifications</h3>
+            <h3>{t('financeApp.pset.notifications')}</h3>
             <div className={styles.checkboxGroup}>
               <label>
                 <input 
@@ -1042,7 +1117,7 @@ const MonthlyPaymentSettings = () => {
                     ...generalSettings,
                     notifications: { ...generalSettings.notifications, paymentReminders: e.target.checked }
                   })}
-                /> Send payment reminders
+                /> {t('financeApp.pset.sendReminders')}
               </label>
               <label>
                 <input 
@@ -1052,7 +1127,7 @@ const MonthlyPaymentSettings = () => {
                     ...generalSettings,
                     notifications: { ...generalSettings.notifications, paymentConfirmations: e.target.checked }
                   })}
-                /> Send payment confirmations
+                /> {t('financeApp.pset.sendConfirmations')}
               </label>
               <label>
                 <input 
@@ -1062,7 +1137,7 @@ const MonthlyPaymentSettings = () => {
                     ...generalSettings,
                     notifications: { ...generalSettings.notifications, overdueNotifications: e.target.checked }
                   })}
-                /> Send overdue notifications
+                /> {t('financeApp.pset.sendOverdue')}
               </label>
             </div>
           </div>
@@ -1072,7 +1147,7 @@ const MonthlyPaymentSettings = () => {
             onClick={handleSaveGeneralSettings}
             disabled={savingSettings}
           >
-            {savingSettings ? 'Saving...' : 'Save Settings'}
+            {savingSettings ? t('financeApp.pset.saving') : t('financeApp.pset.saveSettings')}
           </button>
         </div>
       )}

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const pool = require('../config/db');
+const { branchSafeUpload } = require('../middleware/branchContextMiddleware');
 const fs = require('fs');
 const path = require('path');
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
@@ -106,7 +107,7 @@ function parseAttendanceFile(filePath) {
 /**
  * Upload and process attendance file from USB
  */
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/upload', ...branchSafeUpload(upload.single('file')), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });

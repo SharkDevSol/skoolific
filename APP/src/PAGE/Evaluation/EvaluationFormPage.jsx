@@ -19,7 +19,7 @@ const EvaluationFormPage = () => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const API_BASE = 'https://v2.skoolific.com/api/evaluations';
+  const API_BASE = '/api/evaluations';
   
   const fetchEvaluationForm = useCallback(async ( ) => {
     try {

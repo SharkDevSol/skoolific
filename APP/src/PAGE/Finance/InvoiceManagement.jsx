@@ -35,7 +35,7 @@ const InvoiceManagement = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setInvoices(data.data);
+        setInvoices(Array.isArray(data.data) ? data.data.filter(Boolean) : []);
       }
     } catch (error) {
       console.error('Error fetching invoices:', error);
@@ -56,9 +56,10 @@ const InvoiceManagement = () => {
     return colors[status] || '#9E9E9E';
   };
 
-  const filteredInvoices = invoices.filter(invoice =>
-    invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    invoice.studentId.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredInvoices = (invoices || []).filter(invoice =>
+    invoice &&
+    (String(invoice.invoiceNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+     String(invoice.studentId || '').toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const statusFilterOptions = useMemo(
@@ -77,34 +78,34 @@ const InvoiceManagement = () => {
       {
         key: 'issueDate',
         header: t('finance.invoices.issueDate', 'Issue date'),
-        render: (row) => new Date(row.issueDate).toLocaleDateString()
+        render: (val, row) => new Date(row?.issueDate).toLocaleDateString()
       },
       {
         key: 'dueDate',
         header: t('finance.invoices.dueDate', 'Due date'),
-        render: (row) => new Date(row.dueDate).toLocaleDateString()
+        render: (val, row) => new Date(row?.dueDate).toLocaleDateString()
       },
       {
         key: 'totalAmount',
         header: t('finance.invoices.total', 'Total'),
-        render: (row) => `$${parseFloat(row.totalAmount).toFixed(2)}`
+        render: (val, row) => `$${parseFloat(row?.totalAmount || 0).toFixed(2)}`
       },
       {
         key: 'paidAmount',
         header: t('finance.invoices.paid', 'Paid'),
-        render: (row) => `$${parseFloat(row.paidAmount || 0).toFixed(2)}`
+        render: (val, row) => `$${parseFloat(row?.paidAmount || 0).toFixed(2)}`
       },
       {
         key: 'balance',
         header: t('finance.invoices.balance', 'Balance'),
-        render: (row) => `$${parseFloat(row.balance || 0).toFixed(2)}`
+        render: (val, row) => `$${parseFloat(row?.balance || 0).toFixed(2)}`
       },
       {
         key: 'status',
         header: t('finance.invoices.status', 'Status'),
-        render: (row) => (
-          <Badge variant={row.status === 'PAID' ? 'success' : row.status === 'OVERDUE' ? 'error' : 'default'}>
-            {row.status.replace(/_/g, ' ')}
+        render: (val, row) => (
+          <Badge variant={row?.status === 'PAID' ? 'success' : row?.status === 'OVERDUE' ? 'error' : 'default'}>
+            {(row?.status || '').replace(/_/g, ' ')}
           </Badge>
         )
       }

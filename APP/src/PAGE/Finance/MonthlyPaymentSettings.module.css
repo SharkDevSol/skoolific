@@ -367,7 +367,17 @@ input:checked + .slider:before {
 }
 
 .formGroup {
+  flex: 1;
   margin: 20px 0;
+}
+
+.formRow {
+  display: flex;
+  gap: 20px;
+}
+
+.formRow .formGroup {
+  flex: 1;
 }
 
 .formGroup label {

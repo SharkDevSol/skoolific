@@ -1,23 +1,20 @@
-// Service worker - network first, no caching
-const CACHE_NAME = 'skoolific-v3';
-
-// On install - clear all old caches
+// Kill-switch service worker: deletes ALL caches and unregisters itself.
+// Replaces the old offline-first SW that was serving a stale app shell.
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))))
-  );
 });
 
-// On activate - claim all clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((key) => caches.delete(key)))
+    ).then(() => self.clients.claim())
   );
+  // Unregister this SW so it never runs again.
+  self.registration.unregister();
 });
 
-// Always fetch from network - no cache
 self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request));
+  // Never serve from cache — always go to the network for fresh code.
+  return;
 });

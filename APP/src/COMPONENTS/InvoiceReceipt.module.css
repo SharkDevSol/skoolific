@@ -1,303 +1,289 @@
-/* Receipt Container - A6 Landscape */
-.receipt {
-  width: 148mm;
-  min-height: 105mm;
-  padding: 6mm;
-  background: var(--bg-primary);
-  color: #000;
-  font-family: 'Arial', sans-serif;
+:root {
+  --maroon: #6E2138;
+  --maroon-dark: #4A1626;
+  --purple: #6B3FA0;
+  --green: #1F7A4D;
+  --ring-red: #C0392B;
+  --gold: #F0BE3D;
+  --orange: #E07C1E;
+  --stamp-red: #A63A2E;
+  --paper: #F2E7CE;
+  --paper-light: #FAF3E2;
+  --ink: #2B2118;
+  --ink-soft: #5B4C3B;
+  --hairline: #C6AD82;
+}
+
+* { box-sizing: border-box; }
+
+.voucher {
   position: relative;
+  width: 100%;
+  max-width: 960px;
+  background: var(--paper);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.45), 0 2px 0 rgba(0,0,0,0.1);
+  border-radius: 2px;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  color: var(--ink);
+  margin: 0 auto;
 }
 
-/* Header Section */
-.header {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #333;
+/* Signature torn perforation stub */
+.perforation {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 20px;
+  background: var(--paper);
+  border-right: 2px dashed rgba(43,33,24,0.28);
+}
+.perforation::before {
+  content: "";
+  position: absolute;
+  left: 6px; top: 0; bottom: 0;
+  width: 1px;
+  background-image: radial-gradient(circle, rgba(43,33,24,0.35) 2.4px, transparent 2.5px);
+  background-size: 100% 24px;
+  background-repeat: repeat-y;
 }
 
-.logoSection {
-  flex-shrink: 0;
+.voucherInner {
+  padding: 26px 30px 24px 46px;
 }
 
-.logo {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-  border: 1px solid #333;
-  border-radius: 50%;
-  padding: 2px;
+/* ---- header ---- */
+.head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 22px;
 }
 
-.schoolInfo {
-  flex: 1;
-  text-align: center;
-}
-
-.schoolNameEn {
-  font-size: 7px;
-  font-weight: bold;
-  margin: 0 0 1px 0;
-  color: #000;
-}
-
-.schoolNameAm {
-  font-size: 6px;
-  font-weight: bold;
-  margin: 0 0 1px 0;
-  color: #000;
-}
-
-.schoolNameEn2 {
-  font-size: 5px;
-  margin: 1px 0;
-  color: var(--text-primary);
-}
-
-.schoolNameAr {
-  font-size: 5px;
-  margin: 1px 0;
-  color: var(--text-primary);
-  direction: rtl;
-}
-
-.contact {
-  font-size: 5px;
-  margin: 1px 0 0 0;
-  color: var(--text-secondary);
-}
-
-/* Title Section */
-.titleSection {
-  margin-bottom: 6px;
-}
-
-.titleRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.titleLeft {
-  flex: 1;
-}
-
-.receiptLabel {
-  font-size: 5px;
-  margin: 0 0 1px 0;
-  color: var(--text-primary);
-}
-
-.receiptTitle {
-  font-size: 8px;
-  font-weight: bold;
-  margin: 0;
-  text-decoration: underline;
-  color: #000;
-}
-
-.receiptNumberBox {
-  text-align: right;
-  min-width: 45px;
-}
-
-.dateLabel {
-  font-size: 4px;
-  margin: 0 0 1px 0;
-  color: var(--text-secondary);
-}
-
-.receiptNumber {
-  font-size: 12px;
-  font-weight: bold;
-  color: #e91e63;
-  margin: 0;
-  font-family: 'Courier New', monospace;
-}
-
-.date {
-  font-size: 4px;
-  margin: 1px 0 0 0;
-  color: var(--text-secondary);
-}
-
-/* Body Section */
-.body {
-  margin: 6px 0;
-}
-
-.field {
-  margin-bottom: 4px;
-  page-break-inside: avoid;
-}
-
-.labelAm {
-  display: block;
-  font-size: 4px;
-  color: var(--text-secondary);
-  margin-bottom: 1px;
-}
-
-.labelEn {
-  display: block;
-  font-size: 5px;
-  font-weight: bold;
-  color: #000;
-  margin-bottom: 1px;
-}
-
-.value {
-  border-bottom: 1px solid #333;
-  padding: 2px 2px;
-  min-height: 10px;
-}
-
-.valueBox {
-  border: 1px solid #333;
-  padding: 3px;
-  background: repeating-linear-gradient(
-    45deg,
-    #f5f5f5,
-    #f5f5f5 2px,
-    #fff 2px,
-    #fff 4px
-  );
-  min-height: 14px;
+.brand {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
 
-.studentInfo {
-  font-size: 6px;
-  font-weight: bold;
-  margin: 0 0 1px 0;
-  color: #000;
+.badgeWrap {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  flex: none;
 }
-
-.studentDetails {
-  font-size: 4px;
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.purpose {
-  font-size: 5px;
-  margin: 0 0 1px 0;
-  color: #000;
-}
-
-.invoiceRef {
-  font-size: 4px;
-  margin: 0;
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
-.amountWord {
-  font-size: 5px;
-  font-weight: bold;
-  margin: 0;
-  color: #000;
-  text-transform: capitalize;
-}
-
-.amountFigure {
-  font-size: 8px;
-  font-weight: bold;
-  margin: 0;
-  color: #000;
-  font-family: 'Courier New', monospace;
-}
-
-.paymentMethod {
-  font-size: 5px;
-  margin: 0;
-  color: #000;
-}
-
-.remainder {
-  font-size: 5px;
-  margin: 0;
-  color: #000;
-}
-
-/* Footer Section */
-.footer {
-  margin-top: 8px;
-  padding-top: 6px;
-}
-
-.signatureSection {
-  text-align: center;
-}
-
-.signatureLabel {
-  font-size: 4px;
-  margin: 0 0 1px 0;
-  color: var(--text-secondary);
-}
-
-.signatureLabelEn {
-  font-size: 5px;
-  font-weight: bold;
-  margin: 0 0 3px 0;
-  color: #000;
-}
-
-.signatureLine {
-  border-top: 1px solid #333;
-  width: 50px;
-  margin: 8px auto 0;
-  padding-top: 3px;
-}
-
-.cashierName {
-  font-size: 5px;
-  margin: 0;
-  color: #000;
-}
-
-/* Print Info */
-.printInfo {
+.badgeWrap::before {
+  content: "";
   position: absolute;
-  bottom: 2mm;
-  right: 6mm;
-  font-size: 3px;
-  color: #999;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--gold), var(--orange), var(--ring-red), var(--orange), var(--gold));
+}
+.badge {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--paper-light);
+  border: 3px solid var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.badgeImg {
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+}
+.badgeText {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--maroon);
 }
 
-/* Print Styles */
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.iqra {
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--maroon);
+  letter-spacing: .01em;
+}
+.academy {
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--purple);
+  margin-top: 2px;
+}
+
+.identity { text-align: center; }
+.identity p { margin: 0 0 2px; }
+.so {
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--maroon-dark);
+}
+.am { font-weight: 700; font-size: 12.5px; color: var(--ink); }
+.enName {
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--maroon-dark);
+}
+.ar { font-size: 12px; color: var(--green); }
+.contact {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 10px;
+  letter-spacing: .03em;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+.titleBlock { text-align: right; }
+.titleAm {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-bottom: 1px;
+}
+.titleEn {
+  display: block;
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--maroon);
+  white-space: nowrap;
+}
+.meta {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.metaItem { display: flex; flex-direction: column; align-items: flex-end; }
+.metaLabel {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-soft);
+  margin-bottom: 2px;
+}
+.metaFill {
+  min-width: 90px;
+  min-height: 18px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  border-bottom: 1px solid var(--hairline);
+  padding: 0 2px 3px;
+  text-align: right;
+}
+.stampNo {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--stamp-red);
+  transform: rotate(-3deg);
+  display: inline-block;
+  padding: 1px 3px;
+}
+
+.rule {
+  height: 3px;
+  margin: 16px 0 18px;
+  background: linear-gradient(90deg, var(--ring-red) 0%, var(--orange) 50%, var(--gold) 100%);
+  opacity: 0.85;
+  border-radius: 2px;
+}
+
+/* ---- body: two-column field grid ---- */
+.bodyGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 36px;
+  position: relative;
+}
+.bodyGrid::after {
+  content: "";
+  position: absolute;
+  top: 2px; bottom: 2px; left: 50%;
+  width: 1px;
+  background: var(--hairline);
+  opacity: .7;
+}
+
+.field { margin-bottom: 14px; }
+
+.fieldLabel {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.fieldLabel .labelAm { font-weight: 700; color: var(--ink); font-size: 12px; }
+.fieldLabel .labelEn { font-style: italic; }
+
+.fill {
+  min-height: 20px;
+  border-bottom: 1px dotted var(--hairline);
+  font-size: 13.5px;
+  padding: 0 2px 3px;
+}
+.fill.secondary { margin-top: 8px; }
+.fillStrong { display: block; font-weight: 700; }
+.fillSub { display: block; font-size: 11px; color: var(--ink-soft); }
+
+.field.figure .fieldLabel { justify-content: space-between; }
+.figureBox {
+  min-height: 40px;
+  background:
+    repeating-linear-gradient(135deg, rgba(43,33,24,0.14) 0 2px, transparent 2px 8px),
+    var(--paper-light);
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  padding: 8px 10px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--maroon-dark);
+}
+
+.signBlock { margin-top: 4px; }
+.signBlock .fill { margin-bottom: 5px; }
+
+.finePrint {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+  font-size: 10px;
+  color: var(--ink-soft);
+  text-align: center;
+  letter-spacing: .02em;
+}
+
+@media (max-width: 700px) {
+  .voucherInner { padding: 22px 18px 20px 36px; }
+  .perforation { width: 14px; }
+  .perforation::before { left: 4px; }
+  .head { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 10px; }
+  .titleBlock { text-align: center; }
+  .meta { justify-content: center; }
+  .metaItem { align-items: center; }
+  .metaFill { text-align: center; }
+  .bodyGrid { grid-template-columns: 1fr; }
+  .bodyGrid::after { display: none; }
+  .titleEn { white-space: normal; }
+}
+
 @media print {
-  .receipt {
-    width: 100%;
-    height: 100%;
-    padding: 6mm;
-    margin: 0;
-    box-shadow: none;
-  }
-
-  .printInfo {
-    display: block !important;
-  }
-
-  @page {
-    size: A6 landscape;
-    margin: 0;
-  }
-  
-  body {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
-
-/* Screen Preview */
-@media screen {
-  .receipt {
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    margin: 20px auto;
-  }
+  .voucher { box-shadow: none; max-width: 100%; }
 }

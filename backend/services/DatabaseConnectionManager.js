@@ -64,6 +64,23 @@ class DatabaseConnectionManager {
       await pool.query('CREATE SCHEMA IF NOT EXISTS school_comms');
       await pool.query('CREATE SCHEMA IF NOT EXISTS schedule_schema');
       await pool.query('CREATE SCHEMA IF NOT EXISTS subjects_of_school_schema');
+      await pool.query('CREATE SCHEMA IF NOT EXISTS staff_teachers');
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS public.sms_logs (
+          id BIGSERIAL PRIMARY KEY,
+          template_key TEXT,
+          recipient_name TEXT,
+          phone TEXT,
+          message TEXT,
+          status TEXT NOT NULL DEFAULT 'sent',
+          provider TEXT,
+          error TEXT,
+          segments INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_sms_logs_created ON public.sms_logs (created_at DESC)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_sms_logs_template ON public.sms_logs (template_key)');
       await pool.query(`
         CREATE TABLE IF NOT EXISTS subjects_of_school_schema.subjects (
           id SERIAL PRIMARY KEY,
@@ -102,6 +119,7 @@ class DatabaseConnectionManager {
         await pool.query('INSERT INTO subjects_of_school_schema.school_config (id, term_count) VALUES (1, 2)');
       }
       await pool.query('CREATE SCHEMA IF NOT EXISTS staff_teachers');
+      await pool.query('CREATE SCHEMA IF NOT EXISTS staff_finance');
       await pool.query('CREATE SCHEMA IF NOT EXISTS posts_schema');
       await pool.query('CREATE SCHEMA IF NOT EXISTS school_schema_points');
       await pool.query('CREATE SCHEMA IF NOT EXISTS form_metadata');
@@ -376,8 +394,8 @@ class DatabaseConnectionManager {
       const configCheck = await pool.query('SELECT id FROM school_config WHERE id = 1');
       if (configCheck.rows.length === 0) {
         await pool.query(
-          `INSERT INTO school_config (id, terms, periods_per_shift, period_duration, short_break_duration, teaching_days_per_week, school_days)
-           VALUES (1, 1, 7, 45, 10, 5, '1,2,3,4,5')`
+          `INSERT INTO school_config (id, academic_year, current_year, number_of_terms, school_days, shift_count, periods_per_shift, period_duration_minutes, terms, period_duration, short_break_duration, teaching_days_per_week)
+           VALUES (1, '2025/2026', 2025, 3, '["Monday","Tuesday","Wednesday","Thursday","Friday"]'::jsonb, 1, 7, 45, 1, 45, 10, 5)`
         );
       }
 

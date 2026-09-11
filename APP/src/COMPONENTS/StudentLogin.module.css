@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background: linear-gradient(135deg, #7c2d12 0%, #ea580c 50%, #9a3412 100%);
   padding: 20px;
   position: relative;
   overflow: hidden;
@@ -18,7 +18,7 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.18) 0%, transparent 50%);
   animation: rotate 30s linear infinite;
 }
 

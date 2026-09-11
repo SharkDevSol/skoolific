@@ -1,65 +1,77 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { Pool } = require('pg');
 
-async function checkInvoices() {
+async function check() {
+  // Check iqrab1 (default) - same user/password
+  const pool = new Pool({
+    host: 'localhost', port: 5432, user: 'iqra', password: 'iqra1768',
+    database: 'iqrab1'
+  });
+
   try {
-    console.log('Checking invoices in database...\n');
+    console.log('--- DATABASE: iqrab1 ---');
 
-    // Count total invoices
-    const totalCount = await prisma.invoice.count();
-    console.log(`Total invoices: ${totalCount}\n`);
-
-    if (totalCount === 0) {
-      console.log('❌ No invoices found in database');
-      console.log('\nPossible reasons:');
-      console.log('1. Invoices were not generated yet');
-      console.log('2. Invoice generation failed');
-      console.log('3. Database connection issue\n');
-      return;
-    }
-
-    // Get recent invoices
-    const recentInvoices = await prisma.invoice.findMany({
-      take: 10,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        items: true
+    console.log('\n--- FEE STRUCTURES ---');
+    const fees = await pool.query(`SELECT id, name, "gradeLevel", "isActive", description FROM school_comms."FeeStructure"`);
+    console.log(`Found ${fees.rows.length} fee structure(s):`);
+    fees.rows.forEach(f => {
+      console.log(`  - ${f.name} | class: ${f.gradeLevel} | active: ${f.isActive}`);
+      try {
+        const desc = JSON.parse(f.description || '{}');
+        console.log(`    months: ${JSON.stringify(desc.months || [])}`);
+      } catch(e) {
+        console.log(`    desc (raw): ${f.description}`);
       }
     });
 
-    console.log('Recent invoices:');
-    console.log('================\n');
+    console.log('\n--- INVOICES ---');
+    const inv = await pool.query(`SELECT count(*) as c FROM school_comms."Invoice"`);
+    console.log(`Total invoices: ${inv.rows[0].c}`);
 
-    recentInvoices.forEach((inv, index) => {
-      console.log(`${index + 1}. Invoice #${inv.invoiceNumber}`);
-      console.log(`   Student ID: ${inv.studentId}`);
-      console.log(`   Amount: $${inv.netAmount}`);
-      console.log(`   Status: ${inv.status}`);
-      console.log(`   Issue Date: ${inv.issueDate}`);
-      console.log(`   Due Date: ${inv.dueDate}`);
-      console.log(`   Items: ${inv.items.length}`);
-      console.log('');
-    });
+    if (parseInt(inv.rows[0].c) > 0) {
+      const recentInv = await pool.query(`SELECT "invoiceNumber", "studentId", "totalAmount", status, metadata FROM school_comms."Invoice" ORDER BY "createdAt" DESC LIMIT 5`);
+      recentInv.rows.forEach(i => console.log(`  - ${i.invoiceNumber} | amount: ${i.totalAmount} | status: ${i.status} | month: ${i.metadata?.monthNumber}`));
+    }
 
-    // Group by month
-    const byMonth = {};
-    recentInvoices.forEach(inv => {
-      const date = new Date(inv.issueDate);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      byMonth[key] = (byMonth[key] || 0) + 1;
-    });
-
-    console.log('Invoices by month:');
-    console.log('==================');
-    Object.entries(byMonth).forEach(([month, count]) => {
-      console.log(`${month}: ${count} invoices`);
-    });
-
-  } catch (error) {
-    console.error('❌ Error:', error.message);
+    console.log('\n--- CLASS TABLES ---');
+    const tables = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'classes_schema' ORDER BY table_name`);
+    console.log(`Found ${tables.rows.length} class(es):`);
+    for (const t of tables.rows) {
+      const count = await pool.query(`SELECT count(*) as c FROM classes_schema."${t.table_name}"`);
+      console.log(`  - ${t.table_name}: ${count.rows[0].c} students`);
+    }
+  } catch (e) {
+    console.error('ERROR:', e.message);
   } finally {
-    await prisma.$disconnect();
+    await pool.end();
+  }
+
+  // Now try iqrab2
+  const pool2 = new Pool({
+    host: 'localhost', port: 5432, user: 'iqra', password: 'iqra1768',
+    database: 'iqrab2'
+  });
+
+  try {
+    console.log('\n\n--- DATABASE: iqrab2 ---');
+
+    const fees = await pool2.query(`SELECT id, name, "gradeLevel", "isActive" FROM school_comms."FeeStructure"`);
+    console.log(`Fee structures: ${fees.rows.length}`);
+    fees.rows.forEach(f => console.log(`  - ${f.name} | class: ${f.gradeLevel} | active: ${f.isActive}`));
+
+    const inv = await pool2.query(`SELECT count(*) as c FROM school_comms."Invoice"`);
+    console.log(`Invoices: ${inv.rows[0].c}`);
+
+    const tables = await pool2.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'classes_schema' ORDER BY table_name`);
+    console.log(`Classes: ${tables.rows.length}`);
+    for (const t of tables.rows) {
+      const count = await pool2.query(`SELECT count(*) as c FROM classes_schema."${t.table_name}"`);
+      console.log(`  - ${t.table_name}: ${count.rows[0].c} students`);
+    }
+  } catch (e) {
+    console.error('iqrab2 ERROR:', e.message);
+  } finally {
+    await pool2.end();
   }
 }
 
-checkInvoices();
+check();

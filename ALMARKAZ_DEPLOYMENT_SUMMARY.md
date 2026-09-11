@@ -25,7 +25,7 @@
 ### Database
 - **Name:** almarkaz_school_management
 - **User:** postgres
-- **Password:** Bilal2026SchoolSecurePass
+- **Password:** [REDACTED-PASSWORD]
 - **Host:** localhost
 - **Port:** 5432
 

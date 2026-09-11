@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import styles from '../Finance/PaymentManagement.module.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const AttendanceTimeSettingsCombined = () => {
   const [activeTab, setActiveTab] = useState('global'); // 'global', 'shifts', 'staff-assignment', 'staff-specific'
@@ -184,7 +184,7 @@ const AttendanceTimeSettingsCombined = () => {
   const fetchAllStaff = async () => {
     try {
       const token = localStorage.getItem('authToken') || localStorage.getItem('token');
-      const types = ['Teachers', 'Administrative Staff', 'Supportive Staff'];
+      const types = ['Teachers', 'Administrative Staff', 'Supportive Staff', 'Finance'];
       let allStaff = [];
 
       for (const staffType of types) {

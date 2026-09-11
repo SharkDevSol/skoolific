@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { formatAPIError } from '../utils/errorMessages';
+import { getBranchCode } from '../utils/branchCode';
 import styles from './TaskDetail.module.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com/api';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
 import StudentFormBuilder from '../PAGE/CreateRegister/CreateRegisterStudent/StudentFormBuilder';
 import StaffFormBuilder from '../PAGE/CreateRegister/CreateRegisterStaff/StaffFormBuilder';
 import CreateRegisterStaff from '../PAGE/CreateRegister/CreateRegisterStaff/CreateRegisterStaff';
@@ -145,7 +146,7 @@ function TaskDetail() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase(),
+          'x-branch-code': (getBranchCode() || '').toUpperCase(),
         },
         body: JSON.stringify({ 
           terms,
@@ -243,7 +244,7 @@ function TaskDetail() {
     if (taskId === '5' && !dataLoaded) {
       const loadTask5 = async () => {
         try {
-          const h = { 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() };
+          const h = { 'x-branch-code': (getBranchCode() || '').toUpperCase() };
           const classSubjectsRes = await fetch(`${API_BASE_URL}/mark-list/subjects-classes`, { headers: h });
           if (classSubjectsRes.ok) setClassSubjects(await classSubjectsRes.json());
           const teachersRes = await fetch(`${API_BASE_URL}/school-setup/teachers-with-worktime`, { headers: h });
@@ -274,7 +275,7 @@ function TaskDetail() {
       setTask4DataLoading(true);
       const load = async () => {
         try {
-          const h = { 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() };
+          const h = { 'x-branch-code': (getBranchCode() || '').toUpperCase() };
           const [s, m] = await Promise.all([
             fetch(`${API_BASE_URL}/mark-list/subjects`, { headers: h }),
             fetch(`${API_BASE_URL}/mark-list/subjects-classes`, { headers: h })
@@ -296,7 +297,7 @@ function TaskDetail() {
     if (taskId === '2' && isCompleted) {
       const loadTask2 = async () => {
         try {
-          const h = { 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() };
+          const h = { 'x-branch-code': (getBranchCode() || '').toUpperCase() };
           const res = await fetch(`${API_BASE_URL}/students/form-structure`, { headers: h });
           if (res.ok) {
             const data = await res.json();
@@ -319,7 +320,7 @@ function TaskDetail() {
       const loadConfig = async () => {
         try {
           const response = await fetch(`${API_BASE_URL}/schedule/config`, {
-            headers: { 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() }
+            headers: { 'x-branch-code': (getBranchCode() || '').toUpperCase() }
           });
           if (response.ok) {
             const data = await response.json();
@@ -1024,7 +1025,7 @@ function TaskDetail() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase(),
+            'x-branch-code': (getBranchCode() || '').toUpperCase(),
           },
           body: JSON.stringify({ assignments: assignmentData }),
         });
@@ -1039,7 +1040,7 @@ function TaskDetail() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase(),
+            'x-branch-code': (getBranchCode() || '').toUpperCase(),
           },
           body: JSON.stringify({ 
             assignments: assignmentData,
@@ -1060,7 +1061,7 @@ function TaskDetail() {
         
         // Fetch the updated assignments to display
         const dataResponse = await fetch(`${API_BASE_URL}/mark-list/teacher-assignments`, {
-          headers: { 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() }
+          headers: { 'x-branch-code': (getBranchCode() || '').toUpperCase() }
         });
         if (dataResponse.ok) {
           const data = await dataResponse.json();

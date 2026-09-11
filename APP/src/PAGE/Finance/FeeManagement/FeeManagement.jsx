@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Tag } from 'lucide-react';
+import { getBranchCode } from '../../../utils/branchCode';
 import styles from './FeeManagement.module.css';
 
 import Card from '../../../COMPONENTS/Card/Card';
@@ -15,7 +16,7 @@ const FeeManagement = () => {
   const [showFeeTypesSection, setShowFeeTypesSection] = useState(false);
   const [customFeeTypes, setCustomFeeTypes] = useState([]);
 
-  const branchHeaders = () => ({ 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() });
+  const branchHeaders = () => ({ 'x-branch-code': getBranchCode() });
 
   useEffect(() => {
     fetchFeeStructures();
@@ -260,7 +261,7 @@ const FeeModal = ({ fee, onClose, onSuccess }) => {
     isRecurring: fee?.isRecurring || false,
     dueDate: fee?.dueDate || ''
   });
-  const branchHeaders = () => ({ 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() });
+  const branchHeaders = () => ({ 'x-branch-code': getBranchCode() });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [metadata, setMetadata] = useState({

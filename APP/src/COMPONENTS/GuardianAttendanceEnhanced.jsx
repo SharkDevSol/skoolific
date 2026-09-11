@@ -67,24 +67,30 @@ export const MonthlySummaryView = ({
   return (
     <div className={styles.monthlySummaryView}>
       <div className={styles.monthYearSelector}>
-        <select 
-          value={selectedMonth} 
-          onChange={(e) => onMonthChange(parseInt(e.target.value))}
-          className={styles.monthSelect}
-        >
-          {ethiopianMonths.map((month, idx) => (
-            <option key={idx} value={idx + 1}>{month}</option>
-          ))}
-        </select>
-        <select 
-          value={selectedYear} 
-          onChange={(e) => onYearChange(parseInt(e.target.value))}
-          className={styles.yearSelect}
-        >
-          {years.map(year => (
-            <option key={year} value={year}>{year}</option>
-          ))}
-        </select>
+        <div className={styles.selectWrapper}>
+          <span className={styles.selectLabel}>Month</span>
+          <select 
+            value={selectedMonth} 
+            onChange={(e) => onMonthChange(parseInt(e.target.value))}
+            className={styles.monthSelect}
+          >
+            {ethiopianMonths.map((month, idx) => (
+              <option key={idx} value={idx + 1}>{month}</option>
+            ))}
+          </select>
+        </div>
+        <div className={styles.selectWrapper}>
+          <span className={styles.selectLabel}>Year</span>
+          <select 
+            value={selectedYear} 
+            onChange={(e) => onYearChange(parseInt(e.target.value))}
+            className={styles.yearSelect}
+          >
+            {years.map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+        </div>
         {onDownload && (
           <button 
             className={styles.downloadBtn}

@@ -29,6 +29,15 @@ router.use(express.json());
 router.use(express.urlencoded({ extended: true }));
 router.use(sanitizeInputs);
 
+// ---- BRANCH CODE GATE ----
+// ALL staff routes REQUIRE a branch code (header X-Branch-Code, query ?branchCode=, or body.branchCode).
+// Without it, the request is REJECTED with 400. This prevents accidentally saving data
+// to the master database instead of the correct branch database.
+// The login route also goes through this gate — the login form sends branchCode in the body.
+router.use(validateBranchCode);
+
+
+
 // ---------------------------------------------------------------------
 // Helper function to safely create schema
 // ---------------------------------------------------------------------
@@ -103,8 +112,9 @@ const initializeStaffCounter = async () => {
   }
 };
 
-const getNextGlobalStaffId = async () => {
-  const { rows } = await pool.query(
+const getNextGlobalStaffId = async (client) => {
+  const db = client || pool;
+  const { rows } = await db.query(
     'UPDATE staff_counter SET count = count + 1 WHERE id = 1 RETURNING count'
   );
   return rows[0].count;
@@ -121,7 +131,7 @@ const ensureScheduleSchemaColumns = async (client) => {
       CREATE TABLE IF NOT EXISTS schedule_schema.teachers (
         id SERIAL PRIMARY KEY,
         global_staff_id INTEGER NOT NULL UNIQUE,
-        teacher_name VARCHAR(100) NOT NULL,
+        teacher_name VARCHAR(100) NOT NULL UNIQUE,
         teacher_type VARCHAR(50) NOT NULL DEFAULT 'full_time',
         max_periods_per_day INTEGER DEFAULT 4,
         max_periods_per_week INTEGER DEFAULT 20,
@@ -359,7 +369,7 @@ const updateStaffIds = async (schemaName, className, client = null) => {
 };
 
 const getNextMachineId = async (client) => {
-  const schemas = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff'];
+  const schemas = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff', 'staff_finance'];
   const used = new Set();
   for (const schema of schemas) {
     try {
@@ -825,7 +835,7 @@ router.post('/create-form', async (req, res) => {
   }
 
   if (
-    !['Supportive Staff', 'Administrative Staff', 'Teachers'].includes(staffType) ||
+    !['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'].includes(staffType) ||
     !raw
   )
     return res.status(400).json({ error: 'Invalid staffType or className' });
@@ -998,6 +1008,11 @@ router.delete('/delete-form', async (req, res) => {
 
 // 7.7 ADD SINGLE STAFF (with files, user account, schedule) - FIXED MULTER
 router.post('/add-staff', (req, res, next) => {
+  // Capture branch code from header BEFORE multer (multer callback can lose async context)
+  const incomingBranchCode = req.headers['x-branch-code'];
+  if (incomingBranchCode) {
+    req._branchCode = incomingBranchCode;
+  }
   upload(req, res, (err) => {
     if (err) {
       console.error('Multer error:', err.message);
@@ -1006,32 +1021,57 @@ router.post('/add-staff', (req, res, next) => {
     next();
   });
 }, async (req, res) => {
+  // Restore branch context if it was lost across multer callback
+  const { setBranchCode } = require('../config/db');
+  if (req._branchCode && !require('../config/db').getBranchCode()) {
+    setBranchCode(req._branchCode);
+  }
+  const { staffType, class: rawClass, uploadFields: rawUploadFields = '[]' } = req.body;
+
+  // ---- Input validation ----
+  if (!staffType) {
+    return res.status(400).json({ error: 'staffType is required' });
+  }
+  if (!rawClass) {
+    return res.status(400).json({ error: 'class is required' });
+  }
+
+  // ---- LAST LINE OF DEFENSE: Verify branch code exists ----
+  // The global gate + validateBranchCode middleware should catch this,
+  // but this is a final check inside the handler itself.
+  if (!req.branchCode && !req.headers['x-branch-code']) {
+    console.error('CRITICAL: Staff registration attempted without branch code!');
+    return res.status(400).json({
+      error: 'Branch code is required',
+      message: 'Staff registration requires a branch code. Please log in to a branch first.'
+    });
+  }
+
+  let uploadFields;
+  try {
+    uploadFields = JSON.parse(rawUploadFields);
+  } catch {
+    uploadFields = [];
+  }
+
+  // ---- Parse form data (JSON-stringified values from frontend) ----
+  const formData = {};
+  for (const [k, v] of Object.entries(req.body)) {
+    if (!['staffType', 'class', 'uploadFields'].includes(k)) {
+      try {
+        formData[k] = JSON.parse(v);
+      } catch {
+        formData[k] = v;
+      }
+    }
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const {
-      staffType,
-      class: rawClass,
-      uploadFields: rawUploadFields = '[]',
-    } = req.body;
     const className = sanitizeClassName(rawClass);
     const schema = sanitizeStaffTypeToSchema(staffType);
-    const uploadFields = JSON.parse(rawUploadFields);
-
-    // ---- Parse form data (JSON-stringified values from frontend) ----
-    const formData = {};
-    for (const [k, v] of Object.entries(req.body)) {
-      if (!['staffType', 'class', 'uploadFields'].includes(k)) {
-        try {
-          // Try to parse as JSON first
-          formData[k] = JSON.parse(v);
-        } catch {
-          // If parsing fails, use the raw value
-          formData[k] = v;
-        }
-      }
-    }
 
     console.log('Parsed form data:', {
       staffType, className, 
@@ -1085,11 +1125,13 @@ router.post('/add-staff', (req, res, next) => {
       insertData.machine_id = await getNextMachineId(client);
     }
 
-    // ---- Phone uniqueness check ----
+    // ---- Phone uniqueness check (normalized: 09... and +2519... treated as same) ----
     if (insertData.phone) {
+      const normalized = String(insertData.phone).replace(/\D/g, '').replace(/^0/, '251');
       const phoneCheck = await client.query(
-        `SELECT id FROM "${schema}"."${className}" WHERE phone = $1 LIMIT 1`,
-        [insertData.phone]
+        `SELECT id FROM "${schema}"."${className}" 
+         WHERE phone = $1 OR phone = $2 LIMIT 1`,
+        [insertData.phone, normalized]
       );
       if (phoneCheck.rows.length > 0) {
         throw new Error('Phone number already exists for another staff member');
@@ -1116,7 +1158,7 @@ router.post('/add-staff', (req, res, next) => {
     }
 
     // ---- IDs ----
-    const globalStaffId = await getNextGlobalStaffId();
+    const globalStaffId = await getNextGlobalStaffId(client);
     const max = await client.query(
       `SELECT COALESCE(MAX(staff_id),0) AS m FROM "${schema}"."${className}"`
     );
@@ -1131,6 +1173,12 @@ router.post('/add-staff', (req, res, next) => {
       insertData.staff_work_time = 'Full Time';
     }
 
+    // ---- Normalize phone number to standard format ----
+    if (insertData.phone) {
+      const phoneStr = String(insertData.phone).replace(/\D/g, '');
+      insertData.phone = phoneStr.replace(/^0/, '251');
+    }
+
     // Handle multiple-checkbox fields (convert arrays to strings)
     for (const key in insertData) {
       if (Array.isArray(insertData[key])) {
@@ -1143,8 +1191,7 @@ router.post('/add-staff', (req, res, next) => {
     const vals = [globalStaffId, staffId, ...Object.values(insertData)];
     const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
     
-    console.log('Inserting data with columns:', cols);
-    console.log('Inserting data with values:', vals);
+    console.log('Inserting staff record with columns:', cols.length, 'columns');
 
     const ins = await client.query(
       `INSERT INTO "${schema}"."${className}" (${cols.join(
@@ -1157,14 +1204,22 @@ router.post('/add-staff', (req, res, next) => {
     let userCredentials = null;
     if (formData.name) {
       try {
+        // For Accountant/finance staff, store branch code as class_name so they can log in to Finance App
+        const needsFinanceBranch = staffType === 'Accountant' || staffType === 'finance_officer' || staffType === 'cashier'
+          || (staffType === 'Administrative Staff' && formData.role === 'Accountant');
+        const staffBranchCode = needsFinanceBranch
+          ? (req.body.branchCode || req.headers['x-branch-code'] || className).toUpperCase()
+          : className;
         userCredentials = await createStaffUser(
           globalStaffId,
           formData.name,
           staffType,
-          className
+          staffBranchCode
         );
       } catch (e) {
         console.error('User creation error:', e);
+        // Don't rollback - staff record was added, but report the error
+        userCredentials = { error: e.message };
       }
     }
 
@@ -1214,6 +1269,19 @@ router.post('/add-staff', (req, res, next) => {
       const attendanceRole = formData.role || 
                             (staffType === 'Teachers' ? 'Teacher' : 'General Staff');
       
+      // Ensure table exists in this branch database
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS staff_attendance_profiles (
+          id SERIAL PRIMARY KEY,
+          staff_id VARCHAR(50) NOT NULL UNIQUE,
+          staff_name VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Create initial attendance profile
       await client.query(`
         INSERT INTO staff_attendance_profiles 
@@ -1226,6 +1294,37 @@ router.post('/add-staff', (req, res, next) => {
     }
     
     await client.query('COMMIT');
+
+    // ---- Send welcome SMS ----
+    if (insertData.phone && userCredentials && userCredentials.username) {
+      try {
+        const { sendSMS } = require('../services/SMSService');
+        const { getRenderedTemplate } = require('./smsRoutes');
+        const branchCode = (req._branchCode || req.headers['x-branch-code'] || className || '').toUpperCase();
+        const branchMatch = branchCode.match(/(\d+)$/);
+        const branchName = branchMatch ? `BRANCH ${branchMatch[1]}` : branchCode;
+        const welcomeMsg = await getRenderedTemplate('staff_welcome', {
+          staff_name: formData.name || '',
+          Branch: branchName,
+          branchcode: branchCode,
+          staff_username: userCredentials.username,
+          staff_password: userCredentials.password || ''
+        });
+        if (welcomeMsg) {
+          sendSMS(insertData.phone, welcomeMsg, null, {
+            templateKey: 'staff_welcome',
+            recipientName: formData.name || 'Staff'
+          }).then(result => {
+            if (result.success) console.log(`Welcome SMS sent to ${formData.name} at ${insertData.phone}`);
+            else console.warn(`Welcome SMS failed for ${formData.name}: ${result.error}`);
+          });
+        } else {
+          console.warn('Welcome SMS skipped for staff: staff_welcome template not found or inactive');
+        }
+      } catch (smsErr) {
+        console.warn('Could not send welcome SMS:', smsErr.message);
+      }
+    }
 
     res.json({
       message: 'Staff added successfully',
@@ -1360,11 +1459,16 @@ router.post('/upload-excel', async (req, res) => {
       // user + schedule + school schema points
       if (row.name) {
         try {
+          const needsFinanceBranch = staffType === 'Accountant' || staffType === 'finance_officer' || staffType === 'cashier'
+            || (staffType === 'Administrative Staff' && row.role === 'Accountant');
+          const staffBranchCode = needsFinanceBranch
+            ? (req.body.branchCode || req.headers['x-branch-code'] || className).toUpperCase()
+            : className;
           const creds = await createStaffUser(
             globalStaffId,
             row.name,
             staffType,
-            className
+            staffBranchCode
           );
           if (creds) createdUsers.push({ name: row.name, ...creds });
 
@@ -1434,6 +1538,13 @@ router.post('/login', async (req, res) => {
   try {
     const user = await verifyCredentials(username, password);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    if (user.staffType === 'Finance') {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Finance staff must use the Finance App login at /api/finance-app/login' 
+      });
+    }
 
     const profile = await getStaffProfile(
       user.globalStaffId,
@@ -1510,47 +1621,67 @@ router.get('/profile/:username', authenticateWithBranch, async (req, res) => {
   }
 });
 
-// 7.11 FETCH ALL STAFF DATA FOR A CLASS (includes credentials from staff_users table)
+// 7.11 FETCH ALL STAFF DATA FOR A CLASS (credentials excluded by default for security)
 router.get('/data/:staffType/:className', async (req, res) => {
   const { staffType, className: raw } = req.params;
-  const { includeInactive } = req.query; // Add query parameter to include inactive staff
+  const { includeInactive, includePassword } = req.query;
   const className = sanitizeClassName(raw);
   const schema = sanitizeStaffTypeToSchema(staffType);
 
   try {
-    // Check if is_active column exists
     const columnCheck = await pool.query(
       `SELECT column_name FROM information_schema.columns 
        WHERE table_schema = $1 AND table_name = $2 AND column_name = 'is_active'`,
       [schema, className]
     );
     
-    // Build query with is_active filter if column exists
+    // Ensure staff_users table exists for the LEFT JOIN
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS staff_users (
+          id SERIAL PRIMARY KEY,
+          global_staff_id INTEGER NOT NULL,
+          username VARCHAR(100) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          password_plain VARCHAR(100),
+          staff_type VARCHAR(50) NOT NULL,
+          class_name VARCHAR(100) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (global_staff_id),
+          UNIQUE (username)
+        )
+      `);
+    } catch (tableErr) {
+      // If staff_users table creation fails, just query without the JOIN
+      console.warn('Could not ensure staff_users table, querying without join:', tableErr.message);
+    }
+
     let query;
+    const selectCols = includePassword === 'true'
+      ? `s.*, COALESCE(u.username, '') as username, u.password_plain as password`
+      : `s.*, COALESCE(u.username, '') as username`;
+
     if (columnCheck.rowCount > 0) {
       if (includeInactive === 'true') {
-        // Include all staff (active and inactive)
-        query = `SELECT s.*, u.username, u.password_plain as password
+        query = `SELECT ${selectCols}
                  FROM "${schema}"."${className}" s
                  LEFT JOIN staff_users u ON s.global_staff_id = u.global_staff_id
                  ORDER BY LOWER(s.name) ASC`;
       } else if (includeInactive === 'only') {
-        // Only inactive staff
-        query = `SELECT s.*, u.username, u.password_plain as password
+        query = `SELECT ${selectCols}
                  FROM "${schema}"."${className}" s
                  LEFT JOIN staff_users u ON s.global_staff_id = u.global_staff_id
                  WHERE s.is_active = FALSE
                  ORDER BY LOWER(s.name) ASC`;
       } else {
-        // Only active staff (default)
-        query = `SELECT s.*, u.username, u.password_plain as password
+        query = `SELECT ${selectCols}
                  FROM "${schema}"."${className}" s
                  LEFT JOIN staff_users u ON s.global_staff_id = u.global_staff_id
                  WHERE s.is_active = TRUE OR s.is_active IS NULL
                  ORDER BY LOWER(s.name) ASC`;
       }
     } else {
-      query = `SELECT s.*, u.username, u.password_plain as password
+      query = `SELECT ${selectCols}
                FROM "${schema}"."${className}" s
                LEFT JOIN staff_users u ON s.global_staff_id = u.global_staff_id
                ORDER BY LOWER(s.name) ASC`;
@@ -1559,6 +1690,17 @@ router.get('/data/:staffType/:className', async (req, res) => {
     const { rows } = await pool.query(query);
     res.json({ data: rows });
   } catch (e) {
+    // If the error is that staff_users doesn't exist, try without the JOIN
+    if (e.code === '42P01' && e.message.includes('staff_users')) {
+      try {
+        const { rows } = await pool.query(
+          `SELECT * FROM "${schema}"."${className}" ORDER BY LOWER(name) ASC`
+        );
+        return res.json({ data: rows.map(r => ({ ...r, username: '' })) });
+      } catch (fallbackErr) {
+        return res.status(500).json({ error: 'Data fetch failed', details: fallbackErr.message });
+      }
+    }
     res
       .status(500)
       .json({ error: 'Data fetch failed', details: e.message });
@@ -1801,7 +1943,7 @@ router.get('/staff/:globalStaffId', async (req, res) => {
 
   try {
     // Search across all staff tables
-    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers'];
+    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'];
     let staffMember = null;
 
     for (const staffType of staffTypes) {
@@ -1856,7 +1998,7 @@ router.get('/search-by-id/:staffId', async (req, res) => {
 
   try {
     // Search across all staff tables
-    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers'];
+    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'];
     let staffMember = null;
 
     for (const staffType of staffTypes) {
@@ -2502,11 +2644,16 @@ router.post('/bulk-import', async (req, res) => {
         // Create user account using the proper function (generates username/password and hashes it)
         let userCredentials = null;
         try {
+          const needsFinanceBranch = staffType === 'Accountant' || staffType === 'finance_officer' || staffType === 'cashier'
+            || (staffType === 'Administrative Staff' && staffData.role === 'Accountant');
+          const staffBranchCode = needsFinanceBranch
+            ? (req.body.branchCode || req.headers['x-branch-code'] || sanitizedClassName).toUpperCase()
+            : sanitizedClassName;
           userCredentials = await createStaffUser(
             globalStaffId,
             staffData.name,
             staffType,
-            sanitizedClassName
+            staffBranchCode
           );
         } catch (userErr) {
           console.error(`User creation error for ${staffData.name}:`, userErr.message);
@@ -2565,7 +2712,7 @@ router.put('/toggle-active/:globalStaffId', async (req, res) => {
     await client.query('BEGIN');
     
     // Find which table contains this staff member
-    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers'];
+    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'];
     let found = false;
     let updatedStaff = null;
     

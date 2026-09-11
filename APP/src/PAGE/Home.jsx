@@ -18,7 +18,7 @@ import {
   FiCheckCircle, FiDollarSign, FiTrendingUp,
   FiShoppingCart, FiPackage, FiTool, FiClock, FiBell, FiRefreshCw, FiAlertCircle, FiMoon, FiSun, FiSmile,
   FiClipboard, FiEdit3,
-  FiCpu, FiUpload, FiBookOpen, FiGrid, FiShuffle, FiHelpCircle
+  FiCpu, FiUpload, FiBookOpen, FiGrid, FiShuffle, FiHelpCircle, FiPlay, FiArchive, FiBarChart2
 } from "react-icons/fi";
 import { FaGraduationCap, FaChalkboardTeacher, FaRegCalendarAlt } from "react-icons/fa";
 import { Home as HomeIcon, Users, BookOpen, DollarSign, Package, Briefcase, Settings } from 'lucide-react';
@@ -189,6 +189,11 @@ const Home = () => {
           label: 'Monthly Payments',
         },
         {
+          path: "/finance/student-exemption",
+          icon: <FiAward />,
+          label: 'Student Exemption',
+        },
+        {
           path: "/finance/monthly-payment-settings",
           icon: <FiSettings />,
           label: 'Payment Settings',
@@ -305,11 +310,6 @@ const Home = () => {
           label: 'Teacher Attendance',
         },
         {
-          path: "/hr/device-status",
-          icon: <FiClock />,
-          label: '🔌 Device Status',
-        },
-        {
           path: "/hr/attendance-time-settings",
           icon: <FiClock />,
           label: '⏰ Time & Shift Settings',
@@ -380,6 +380,16 @@ const Home = () => {
           label: '📋 Student Attendance (Weekly)',
         },
         {
+          path: "/student-attendance-time-settings",
+          icon: <FiClock />,
+          label: '⚙️ Student Attendance Settings',
+        },
+        {
+          path: "/reports/registrations",
+          icon: <FiUsers />,
+          label: '📊 Registration Report (New/Old + Today)',
+        },
+        {
           path: "/create-mark-list",
           icon: <FiFilePlus />,
           label: t('createMarklist'),
@@ -395,19 +405,19 @@ const Home = () => {
           label: t('schedule'),
         },
         {
-          path: "/post",
-          icon: <FiMessageSquare />,
-          label: t('post'),
-        },
-        {
-          path: "/tasks",
-          icon: <FiCheckCircle />,
-          label: t('tasks'),
-        },
-        {
           path: "/faults",
           icon: <FiAlertCircle />,
           label: 'Student Faults',
+        },
+        {
+          path: "/class-teacher-assignment",
+          icon: <FaChalkboardTeacher />,
+          label: t('classTeachers'),
+        },
+        {
+          path: "/evaluation-book/assignments",
+          icon: <FiUsers />,
+          label: t('evalBookAssignments'),
         },
       ],
     },
@@ -426,6 +436,9 @@ const Home = () => {
         { path: "/ai/generate/quiz", icon: <FiHelpCircle />, label: 'Quiz' },
         { path: "/ai/generate/exam", icon: <FiEdit3 />, label: 'Exam' },
         { path: "/ai/generate/scramble-exam", icon: <FiShuffle />, label: 'Scramble' },
+        { path: "/ai-test-generator", icon: <FiEdit3 />, label: 'Test Generator' },
+        { path: "/ai-tests", icon: <FiClipboard />, label: 'Saved Tests' },
+        { path: "/ai-test-player", icon: <FiPlay />, label: 'Test Player' },
       ],
     },
     {
@@ -434,29 +447,44 @@ const Home = () => {
       icon: <FiSettings />,
       items: [
         {
+          path: "/tasks",
+          icon: <FiCheckCircle />,
+          label: t('tasks'),
+        },
+        {
+          path: "/post",
+          icon: <FiMessageSquare />,
+          label: t('post'),
+        },
+        {
           path: "/communication",
           icon: <FiMessageSquare />,
           label: t('communication'),
         },
         {
-          path: "/guardian-notifications",
-          icon: <FiBell />,
-          label: 'Guardian Notifications',
-        },
-        {
-          path: "/class-teacher-assignment",
-          icon: <FaChalkboardTeacher />,
-          label: t('classTeachers'),
-        },
-        {
-          path: "/evaluation-book/assignments",
-          icon: <FiUsers />,
-          label: t('evalBookAssignments'),
-        },
-        {
           path: "/settings",
           icon: <FiSettings />,
           label: t('settings'),
+        },
+        {
+          path: "/sms",
+          icon: <FiMessageSquare />,
+          label: 'SMS Templates',
+        },
+        {
+          path: "/sms-counter",
+          icon: <FiBarChart2 />,
+          label: 'SMS Counter',
+        },
+        {
+          path: "/device-status",
+          icon: <FiClock />,
+          label: '🔌 Device Status',
+        },
+        {
+          path: "/backup",
+          icon: <FiArchive />,
+          label: 'Data Backup',
         },
         {
           path: "/admin-sub-accounts",

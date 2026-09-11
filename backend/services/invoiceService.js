@@ -209,12 +209,20 @@ async function generateInvoice({
   
   // Generate unique invoice number
   const invoiceNumber = await generateInvoiceNumber();
-  
+
+  // Generate unique 10-digit invoice reference code
+  const { generateUniqueInvoiceRefCode } = require('../utils/invoiceRefCode');
+  const invoiceRefCode = await generateUniqueInvoiceRefCode(async (code) => {
+    const existing = await prisma.invoice.findUnique({ where: { invoiceRefCode: code } });
+    return !!existing;
+  });
+
   // Create invoice with items in a transaction
   const invoice = await prisma.$transaction(async (tx) => {
     const newInvoice = await tx.invoice.create({
       data: {
         invoiceNumber,
+        invoiceRefCode,
         studentId,
         academicYearId,
         termId,

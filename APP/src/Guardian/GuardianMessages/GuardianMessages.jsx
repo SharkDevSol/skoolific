@@ -20,7 +20,7 @@ const GuardianMessages = () => {
 
   // API base URLs
   const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
-  const API_URL = import.meta.env.VITE_API_URL || '/api';
+  const API_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
 
   // Get guardian info from localStorage
   const guardianInfo = JSON.parse(localStorage.getItem('guardianInfo') || '{}');

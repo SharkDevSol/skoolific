@@ -470,7 +470,7 @@ router.post('/attendance/ethiopian', authenticateWithBranch, async (req, res) =>
     console.log('✅ Tables verified');
 
     // Get staff shift assignment (with better error handling)
-    const staffSchemas = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff'];
+    const staffSchemas = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff', 'staff_finance'];
     let shiftAssignment = 'shift1'; // default
     
     console.log(`🔍 Looking for shift assignment for staff: ${staffId} (${staffName})`);
@@ -1475,19 +1475,36 @@ router.get('/devices/status', authenticateWithBranch, async (req, res) => {
     // Get list of connected device serial numbers
     const connectedDevices = ai06Service.getConnectedDevices();
     
+    // Only show devices bound to the requesting branch
+    const requestBranch = (req.branchCode || '').toUpperCase();
+    const branchDevices = requestBranch
+      ? connectedDevices.filter(device => (device.branch || '').toUpperCase() === requestBranch)
+      : connectedDevices;
+    
+    // Each branch has its own AI06 WebSocket port
+    const branchPortMap = {
+      'IQRA1': 7701,
+      'IQRA2': 7790,
+      'IQRA3': 7703
+    };
+    
     // Format device information
-    const devices = connectedDevices.map((serialNumber, index) => ({
-      serialNumber,
+    const devices = branchDevices.map((device, index) => ({
+      serialNumber: device.serialNumber,
       name: `AI06 Device ${index + 1}`,
       model: 'AI06 Face Recognition',
-      status: 'connected'
+      status: 'connected',
+      branch: device.branch,
+      ip: device.ip,
+      connectedAt: device.connectedAt
     }));
     
     res.json({
       success: true,
       devices,
       count: devices.length,
-      serverPort: 7788,
+      branch: requestBranch || ai06Service.branchCode,
+      serverPort: branchPortMap[requestBranch] || (parseInt(process.env.AI06_WEBSOCKET_PORT, 10) || 7788),
       timestamp: new Date().toISOString()
     });
   } catch (error) {

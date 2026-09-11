@@ -10,7 +10,16 @@ const LanguageContext = createContext();
  */
 export const LanguageProvider = ({ children }) => {
   const { i18n } = useTranslation();
-  const [language, setLanguage] = useState(i18n.language);
+  // Restore saved language from localStorage (persist across app reopen)
+  const [language, setLanguage] = useState(() => localStorage.getItem('language') || i18n.language);
+
+  useEffect(() => {
+    // Apply the saved language to i18n on mount so text persists after reopen
+    if (language && language !== i18n.language) {
+      i18n.changeLanguage(language);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   /**
    * Change the application language

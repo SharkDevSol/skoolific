@@ -125,10 +125,15 @@ export const getFileUrl = (filename, type = 'staff') => {
   if (typeof filename === 'object') return '';
   
   // Convert to string if it's not already
-  const fileStr = String(filename);
+  const fileStr = String(filename).trim();
+  
+  // Reject placeholder values that are not real file paths
+  if (!fileStr || fileStr === '{}' || fileStr === '[]' || fileStr === '[object Object]' || fileStr === 'null' || fileStr === 'undefined') {
+    return '';
+  }
   
   // API base URL from environment variable
-  const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://v2.skoolific.com';
+  const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
   
   // If already a full URL
   if (fileStr.startsWith('http')) {

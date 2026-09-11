@@ -11,7 +11,7 @@ import Input from '../../COMPONENTS/Input/Input';
 import Table from '../../COMPONENTS/Table/Table';
 import Badge from '../../COMPONENTS/Badge/Badge';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const LeaveManagement = () => {
   const { t } = useTranslation();
@@ -47,7 +47,7 @@ const LeaveManagement = () => {
       const token = localStorage.getItem('authToken') || localStorage.getItem('token');
       
       // Fetch all staff from all departments using the same approach as ListStaff
-      const types = ['Supportive Staff', 'Administrative Staff', 'Teachers'];
+      const types = ['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'];
       let allStaff = [];
       
       for (const staffType of types) {

@@ -6,6 +6,7 @@ import { Building2, User as UserIcon, Lock } from 'lucide-react';
 import styles from './StaffLogin.module.css';
 import Input from './Input/Input';
 import Button from './Button/Button';
+import { getBranchCode, setBranchCode } from '../utils/branchCode';
 import ThemeToggle from './ThemeToggle/ThemeToggle';
 import LanguageSelector from './LanguageSelector/LanguageSelector';
 import Toast from './Toast/Toast';
@@ -25,7 +26,7 @@ const StaffLogin = () => {
 
   // Load saved branch code from localStorage on mount
   useEffect(() => {
-    const savedBranchCode = localStorage.getItem('branchCode');
+    const savedBranchCode = getBranchCode();
     if (savedBranchCode) {
       setCredentials(prev => ({ ...prev, branchCode: savedBranchCode }));
     }
@@ -49,13 +50,12 @@ const StaffLogin = () => {
     return () => clearInterval(timerRef.current);
   }, [lockoutSeconds]);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setCredentials(prev => ({ ...prev, [name]: value }));
+  const handleInputChange = (field, value) => {
+        setCredentials(prev => ({ ...prev, [field]: value }));
     
     // Clear error for this field when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
@@ -99,7 +99,7 @@ const StaffLogin = () => {
         localStorage.setItem('staffProfile', JSON.stringify(response.data.profile));
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('userType', 'staff');
-        localStorage.setItem('branchCode', credentials.branchCode);
+        setBranchCode(credentials.branchCode, true);
         navigate('/app/staff');
       }
     } catch (error) {
@@ -148,7 +148,7 @@ const StaffLogin = () => {
               label={t('auth.branchCode', 'Branch Code')}
               name="branchCode"
               value={credentials.branchCode}
-              onChange={handleInputChange}
+              onChange={(value) => handleInputChange('branchCode', value)}
               onBlur={() => handleBlur('branchCode')}
               icon={<Building2 size={20} />}
               placeholder={t('auth.branchCodePlaceholder', 'Enter branch code')}
@@ -161,7 +161,7 @@ const StaffLogin = () => {
               label={t('auth.username', 'Username')}
               name="username"
               value={credentials.username}
-              onChange={handleInputChange}
+              onChange={(value) => handleInputChange('username', value)}
               onBlur={() => handleBlur('username')}
               icon={<UserIcon size={20} />}
               placeholder={t('auth.usernamePlaceholder', 'Enter your username')}
@@ -176,7 +176,7 @@ const StaffLogin = () => {
               type="password"
               name="password"
               value={credentials.password}
-              onChange={handleInputChange}
+              onChange={(value) => handleInputChange('password', value)}
               onBlur={() => handleBlur('password')}
               icon={<Lock size={20} />}
               placeholder={t('auth.passwordPlaceholder', 'Enter your password')}

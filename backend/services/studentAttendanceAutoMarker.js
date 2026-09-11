@@ -154,11 +154,17 @@ async function markAbsentStudents() {
     let daysFound = 0;
     let daysChecked = 0;
     const maxDaysToCheck = 30; // Safety limit
-    
+
+    // Normalize school_days to day names (may be stored as names or numbers 1=Monday..7=Sunday)
+    const dayNameMap = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const schoolDays = (settings.school_days || [])
+      .map(d => typeof d === 'number' ? dayNameMap[d] : d)
+      .filter(Boolean);
+
     while (daysFound < 7 && daysChecked < maxDaysToCheck) {
       const dayOfWeek = getEthiopianDayOfWeek(currentDate.year, checkMonth, checkDay);
       
-      if (settings.school_days.includes(dayOfWeek)) {
+      if (schoolDays.includes(dayOfWeek)) {
         daysToProcess.unshift({ month: checkMonth, day: checkDay, dayOfWeek });
         daysFound++;
       }

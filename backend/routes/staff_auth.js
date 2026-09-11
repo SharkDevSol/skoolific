@@ -2,8 +2,8 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const pool = require('../config/db');
 
-// Initialize staff_users table
-const initializeStaffUsersTable = async () => {
+// Ensure staff_users table exists (safe to call anytime)
+const ensureStaffUsersTable = async () => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS staff_users (
@@ -20,7 +20,6 @@ const initializeStaffUsersTable = async () => {
       );
     `);
     
-    // Add password_plain column if it doesn't exist (for existing tables)
     try {
       await pool.query(`
         ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS password_plain VARCHAR(100)
@@ -28,12 +27,14 @@ const initializeStaffUsersTable = async () => {
     } catch (alterError) {
       // Column might already exist
     }
-    
-    console.log('Staff users table initialized');
   } catch (error) {
-    console.error('Error initializing staff users table:', error);
+    console.error('Error ensuring staff_users table:', error);
+    throw error;
   }
 };
+
+// Initialize staff_users table (backward compat)
+const initializeStaffUsersTable = ensureStaffUsersTable;
 
 // Generate username based on staff name
 const generateUsername = (name) => {
@@ -64,6 +65,9 @@ const hashPassword = async (password) => {
 // Create staff user account
 const createStaffUser = async (globalStaffId, name, staffType, className) => {
   try {
+    // Ensure staff_users table exists before using it
+    await ensureStaffUsersTable();
+
     // Check if user already exists
     const existingUser = await pool.query(
       'SELECT id FROM staff_users WHERE global_staff_id = $1',
@@ -243,7 +247,7 @@ const searchStaffUser = async (searchTerm) => {
     }
     
     // If not found by username, search by name in staff tables
-    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers'];
+    const staffTypes = ['Supportive Staff', 'Administrative Staff', 'Teachers', 'Finance'];
     const results = [];
     
     for (const staffType of staffTypes) {
@@ -342,6 +346,7 @@ const getStaffUserById = async (globalStaffId) => {
 
 module.exports = {
   initializeStaffUsersTable,
+  ensureStaffUsersTable,
   createStaffUser,
   verifyCredentials,
   getStaffProfile,

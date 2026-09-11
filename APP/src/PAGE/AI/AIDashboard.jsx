@@ -12,6 +12,7 @@ const quickActions = [
   { path: '/ai/generate/quiz', icon: <FiHelpCircle />, label: 'Quiz', color: 'var(--color-success)' },
   { path: '/ai/generate/exam', icon: <FiEdit3 />, label: 'Exam', color: 'var(--color-danger)' },
   { path: '/ai/generate/scramble-exam', icon: <FiShuffle />, label: 'Scramble', color: 'var(--color-primary)' },
+  { path: '/ai/test-generator', icon: <FiEdit3 />, label: 'Test Generator', color: 'var(--color-secondary)' },
 ];
 
 export default function AIDashboard() {

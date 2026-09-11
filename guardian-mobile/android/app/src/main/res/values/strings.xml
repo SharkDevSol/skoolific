@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IQRA Parent</string>
+    <string name="title_activity_main">IQRA Parent</string>
+    <string name="package_name">com.skoolific.guardian</string>
+    <string name="custom_url_scheme">com.skoolific.guardian</string>
+</resources>

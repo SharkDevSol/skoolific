@@ -7,7 +7,7 @@ import ChatWindow from '../../COMPONENTS/Chat/ChatWindow';
 import ConversationList from '../../COMPONENTS/Chat/ConversationList';
 import styles from './GuardianChat.module.css';
 
-const API_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
 
 const GuardianChat = () => {
   const { t } = useTranslation();

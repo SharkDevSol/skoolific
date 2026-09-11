@@ -48,28 +48,26 @@ const api = axios.create({
  */
 api.interceptors.request.use(
   (config) => {
+    // Never force JSON content-type for FormData requests (breaks file uploads)
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     // Get authentication token
     const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Get branch code
-    const branchCode = (localStorage.getItem('branchCode') || sessionStorage.getItem('branchCode') || '').toUpperCase();
+    // Get branch code (sessionStorage first for per-tab isolation)
+    const branchCode = getBranchCode();
     if (branchCode) {
       config.headers['X-Branch-Code'] = branchCode;
     }
     
-    // Log request in development mode
+    // Log request in development mode (minimal - no sensitive data)
     if (isDevelopment()) {
-      console.log('🚀 API Request:', {
-        method: config.method?.toUpperCase(),
-        url: config.url,
-        baseURL: config.baseURL,
-        headers: config.headers,
-        data: config.data,
-        params: config.params
-      });
+      console.log(`🚀 ${config.method?.toUpperCase()} ${config.url}`);
     }
     
     return config;
@@ -96,14 +94,9 @@ api.interceptors.request.use(
  */
 api.interceptors.response.use(
   (response) => {
-    // Log response in development mode
+    // Log response in development mode (minimal - no response data)
     if (isDevelopment()) {
-      console.log('✅ API Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: response.config.url,
-        data: response.data
-      });
+      console.log(`✅ ${response.status} ${response.config.url}`);
     }
     
     return response;
@@ -164,15 +157,9 @@ api.interceptors.response.use(
       }
     }
     
-    // Log error in development mode
+    // Log error in development mode (minimal)
     if (isDevelopment()) {
-      console.error('❌ API Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        url: error.config?.url,
-        message: error.message,
-        data: error.response?.data
-      });
+      console.error(`❌ ${error.response?.status} ${error.config?.url} - ${error.message}`);
     }
     
     // Use centralized error handler
@@ -197,21 +184,25 @@ const RETRY_DELAY = 1000; // 1 second
  * @returns {boolean} True if request should be retried
  */
 function shouldRetry(error) {
-  // Retry on network errors
+  // Retry on network errors (request never reached the server - safe to retry)
   if (!error.response) {
     return true;
   }
-  
-  // Retry on 5xx server errors
+
+  const method = (error.config?.method || 'get').toLowerCase();
+
+  // Retry on 5xx server errors ONLY for idempotent GET requests.
+  // Retrying POST/PUT/DELETE that reached the server risks duplicate
+  // records (e.g. double student registration) and masks real errors.
   if (error.response.status >= 500 && error.response.status < 600) {
-    return true;
+    return method === 'get';
   }
-  
+
   // Retry on 429 (Too Many Requests)
   if (error.response.status === 429) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -236,7 +227,7 @@ api.interceptors.response.use(
       const delay = RETRY_DELAY * Math.pow(2, config._retryCount - 1);
       
       if (isDevelopment()) {
-        console.log(`🔄 Retrying request (${config._retryCount}/${MAX_RETRIES}) after ${delay}ms:`, config.url);
+        console.log(`🔄 Retry ${config._retryCount}/${MAX_RETRIES} after ${delay}ms: ${config.url}`);
       }
       
       // Wait before retrying
@@ -310,15 +301,14 @@ export function setRefreshToken(token, remember = false) {
 }
 
 /**
- * Set branch code
- * @param {string} branchCode - Branch code
- * @param {boolean} remember - Whether to use localStorage (true) or sessionStorage (false)
+ * Set branch code — sessionStorage only (per-tab isolation).
+ * If remember=true, saves to rememberedBranchCode for login form pre-fill only.
  */
 export function setBranchCode(branchCode, remember = false) {
+  const value = (branchCode || '').toUpperCase();
+  sessionStorage.setItem('branchCode', value);
   if (remember) {
-    localStorage.setItem('branchCode', branchCode);
-  } else {
-    sessionStorage.setItem('branchCode', branchCode);
+    localStorage.setItem('rememberedBranchCode', value);
   }
 }
 
@@ -339,11 +329,13 @@ export function getRefreshToken() {
 }
 
 /**
- * Get branch code
- * @returns {string|null} Branch code or null
+ * Get branch code — sessionStorage first (per-tab isolation), then fall back to
+ * localStorage.rememberedBranchCode so a saved login survives app close/reopen
+ * (e.g. the guardian mobile app closes and reopens — sessionStorage is wiped but
+ * localStorage persists).
  */
 export function getBranchCode() {
-  return localStorage.getItem('branchCode') || sessionStorage.getItem('branchCode');
+  return sessionStorage.getItem('branchCode') || localStorage.getItem('rememberedBranchCode') || '';
 }
 
 /**
@@ -353,6 +345,7 @@ export function clearAuth() {
   localStorage.removeItem('authToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('branchCode');
+  localStorage.removeItem('rememberedBranchCode');
   sessionStorage.removeItem('authToken');
   sessionStorage.removeItem('refreshToken');
   sessionStorage.removeItem('branchCode');
@@ -381,7 +374,7 @@ axios.interceptors.request.use(
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
-    const branchCode = (localStorage.getItem('branchCode') || sessionStorage.getItem('branchCode') || '').toUpperCase();
+    const branchCode = getBranchCode();
     if (branchCode) {
       config.headers['X-Branch-Code'] = branchCode;
     }

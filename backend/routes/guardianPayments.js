@@ -77,11 +77,13 @@ router.get('/:guardianUsername', async (req, res) => {
     let totalUnpaidCount = 0;
     
     for (const ward of wards) {
-      // Convert school_id and id to UUID format used in invoices
-      // Format: 00000000-0000-0000-00XX-0000000000YY where XX is school_id and YY is id
+      // Convert school_id and class_id to the student UUID used in invoices.
+      // Format: 00000000-0000-0000-{schoolId padded 4}-{classId padded 12}.
+      // This MUST match studentRoutes.js / financeFeeStructureRoutes.js which build
+      // the same UUID as `{schoolId}-{classId}` (NOT `{schoolId}-{id}`).
       const schoolIdNum = parseInt(ward.school_id);
-      const idNum = parseInt(ward.id);
-      const studentId = `00000000-0000-0000-${String(schoolIdNum).padStart(4, '0')}-${String(idNum).padStart(12, '0')}`;
+      const classIdNum = parseInt(ward.class_id);
+      const studentId = `00000000-0000-0000-${String(schoolIdNum).padStart(4, '0')}-${String(classIdNum).padStart(12, '0')}`;
       
       console.log(`Processing ward: ${ward.student_name}, studentId: ${studentId}`);
       
@@ -105,26 +107,31 @@ router.get('/:guardianUsername', async (req, res) => {
       
       console.log(`Found ${invoices.length} invoices for ${ward.student_name}`);
       
-      // Get current Ethiopian month to filter unlocked invoices
-      const now = new Date();
-      const ethiopianYear = now.getFullYear() - 7; // Approximate Ethiopian year
-      const gregorianMonth = now.getMonth() + 1;
+      // Get current Ethiopian month to filter unlocked invoices — MUST match the
+      // admin finance page exactly. Source of truth: getServerEthiopianMonth() in
+      // financeMonthlyPaymentViewRoutes.js. Ethiopia is UTC+3; before the 2019 school
+      // year starts (i.e. Ethiopian year still 2018) only Meskerem (month 1) is unlocked.
+      const ethiopianCalendar = require('../utils/ethiopianCalendar');
+      const shifted = new Date(Date.now() + 3 * 3600 * 1000);
+      const ethiopiaLocal = new Date(Date.UTC(
+        shifted.getUTCFullYear(),
+        shifted.getUTCMonth(),
+        shifted.getUTCDate(),
+        12, 0, 0
+      ));
+      const eth = ethiopianCalendar.toEthiopian(ethiopiaLocal);
+      const currentEthiopianMonth = eth.year < 2019 ? 1 : eth.month;
       
-      // Approximate Ethiopian month (this is a simple conversion)
-      // For accurate conversion, you'd need a proper Ethiopian calendar library
-      let currentEthiopianMonth;
-      if (gregorianMonth >= 9) {
-        currentEthiopianMonth = gregorianMonth - 8; // Sep=1, Oct=2, etc.
-      } else {
-        currentEthiopianMonth = gregorianMonth + 4; // Jan=5, Feb=6, etc.
-      }
-      
-      // Process invoices to get monthly payment details
+      // Process invoices to get monthly payment details.
+      // Show: (1) every PAID month as full payment history, AND (2) unlocked-but-unpaid
+      // months that are currently due. Locked unpaid months stay hidden (not yet due).
       const monthlyPayments = invoices
         .filter(invoice => {
           const monthNumber = invoice.metadata?.monthNumber;
-          // Only include invoices for unlocked months (current month and earlier)
-          return monthNumber && monthNumber <= currentEthiopianMonth;
+          if (!monthNumber) return false;
+          const isUnlocked = monthNumber <= currentEthiopianMonth;
+          const isPaid = invoice.status === 'PAID';
+          return isUnlocked || isPaid;
         })
         .map(invoice => {
         const totalAmount = parseFloat(invoice.netAmount);
@@ -180,7 +187,9 @@ router.get('/:guardianUsername', async (req, res) => {
           paidInvoices: monthlyPayments.filter(p => p.isPaid).length,
           unpaidInvoices: unpaidInvoices.length,
           totalPaid: monthlyPayments.reduce((sum, p) => sum + p.paidAmount, 0),
-          totalBalance: monthlyPayments.reduce((sum, p) => sum + p.balance, 0),
+          // Balance Due = outstanding on UNPAID (unlocked) invoices only.
+          // Exclude paid invoices (which may carry negative/overpayment balance).
+          totalBalance: unpaidInvoices.reduce((sum, p) => sum + p.balance, 0),
           overdueInvoices: monthlyPayments.filter(p => p.isOverdue).length
         }
       });

@@ -251,7 +251,8 @@ class AttendanceAutoMarker {
         const staffSchemas = [
           { schema: 'staff_teachers', type: 'Teachers' },
           { schema: 'staff_administrative_staff', type: 'Administrative Staff' },
-          { schema: 'staff_supportive_staff', type: 'Supportive Staff' }
+          { schema: 'staff_supportive_staff', type: 'Supportive Staff' },
+          { schema: 'staff_finance', type: 'Finance' }
         ];
 
         for (const { schema, type } of staffSchemas) {

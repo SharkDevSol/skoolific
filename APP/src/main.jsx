@@ -1,12 +1,15 @@
 import { BrowserRouter } from "react-router-dom";
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './styles/global.css'
+import './styles/theme.css'
 import './styles/fonts.css'
 import App from './App.jsx'
 import { AppProvider } from './context/AppContext.jsx'
 import { LanguageSelectionProvider } from './context/LanguageSelectionContext.jsx'
 import axios from 'axios'
 import './config/axios.config'   // Register global interceptors (auth token + branch code)
+import { getBranchCode } from './utils/branchCode'
 
 // Patch global fetch to add auth + branch headers (for pages using raw fetch())
 const origFetch = window.fetch;
@@ -15,19 +18,22 @@ window.fetch = function(input, init) {
   init.headers = init.headers || {};
   const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
   if (token) init.headers['Authorization'] = 'Bearer ' + token;
-  const branchCode = (localStorage.getItem('branchCode') || sessionStorage.getItem('branchCode') || '').toUpperCase();
+  const branchCode = getBranchCode();
   if (branchCode) init.headers['X-Branch-Code'] = branchCode;
   return origFetch.call(window, input, init);
 };
 
-// Configure axios defaults from environment variable
-axios.defaults.baseURL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
+// Configure axios defaults with auto-detected baseURL
+axios.defaults.baseURL = (() => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+})();
 console.log('🌐 Axios configured with baseURL:', axios.defaults.baseURL);
 
 // Register service worker for offline support
 if ('serviceWorker' in navigator) {
-  // Clear all old caches first
-  caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });

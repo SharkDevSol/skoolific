@@ -17,7 +17,7 @@ const RespondForm = ({ isOpen, onClose, requestId, questions, onSubmit }) => {
     
     try {
       // Send response without token
-      const res = await axios.post(`https://v2.skoolific.com/api/chats/requests/${requestId}/respond`, { 
+      const res = await axios.post(`/api/chats/requests/${requestId}/respond`, { 
         responses: respArray 
       });
       onSubmit(res.data);

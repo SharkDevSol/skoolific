@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
-const prisma = new PrismaClient();
+const { branchPrisma: prisma } = require('../services/BranchPrismaService');
 const { 
   calculateStudentBalance, 
   generateInvoiceWithBalance 
@@ -58,7 +57,9 @@ router.get('/current-month', authenticateWithBranch, async (req, res) => {
     // Parse months data from description
     let selectedMonths = [];
     try {
-      const monthsData = JSON.parse(feeStructure.description || '{}');
+      let desc = feeStructure.description || '{}';
+      desc = desc.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+      const monthsData = JSON.parse(desc);
       selectedMonths = monthsData.months || [];
     } catch (error) {
       console.error('Error parsing months data:', error);
@@ -146,11 +147,24 @@ router.post('/generate-all', authenticateWithBranch, requirePermission(FINANCE_P
     let selectedMonths = [];
     let description = 'Monthly tuition fee';
     let registrationFee = 0;
+    let oldRegistrationFee = 0;
+    let newRegistrationFee = 0;
     try {
-      const monthsData = JSON.parse(feeStructure.description || '{}');
+      let desc = feeStructure.description || '{}';
+      desc = desc.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+      const monthsData = JSON.parse(desc);
       selectedMonths = monthsData.months || [];
       description = monthsData.description || description;
-      registrationFee = parseFloat(monthsData.registrationFee) || 0;
+      // Backward compat: if old single registrationFee field exists, use it for both
+      if (monthsData.registrationFee !== undefined) {
+        registrationFee = parseFloat(monthsData.registrationFee) || 0;
+        oldRegistrationFee = registrationFee;
+        newRegistrationFee = registrationFee;
+      } else {
+        oldRegistrationFee = parseFloat(monthsData.oldRegistrationFee) || 0;
+        newRegistrationFee = parseFloat(monthsData.newRegistrationFee) || 0;
+        registrationFee = newRegistrationFee; // default to new for invoice amount
+      }
     } catch (error) {
       console.error('Error parsing months data:', error);
     }
@@ -308,28 +322,18 @@ router.post('/generate-all', authenticateWithBranch, requirePermission(FINANCE_P
     ];
 
     // Helper function to convert Ethiopian calendar to Gregorian and calculate due date
-    // Ethiopian calendar is ~7-8 years behind Gregorian
-    // Ethiopian New Year (Meskerem 1) = September 11 (or 12 in leap year)
+    // Uses the centralized Ethiopian calendar utility (leap-year + Pagume aware)
+    const { toEthiopian, toGregorian } = require('../utils/ethiopianCalendar');
     const getEthiopianMonthDueDate = (monthNumber, gracePeriod) => {
-      // Current Ethiopian year is 2018, Gregorian year is 2026
-      const gregorianYear = 2026;
+      const ethNow = toEthiopian(new Date());
+      const ethiopianYear = ethNow.year;
       
-      // Ethiopian New Year (Meskerem 1, 2018) = September 11, 2025
-      const ethiopianNewYear = new Date(gregorianYear - 1, 8, 11); // September 11, 2025
-      
-      // Each Ethiopian month is 30 days (except Pagume which is 5-6 days)
-      // Month 1 (Meskerem) starts on Ethiopian New Year (1/1/2018)
-      // Month 2 (Tikimt) starts 30 days later (2/1/2018), etc.
-      const daysFromNewYear = (monthNumber - 1) * 30;
-      
-      // Calculate the 1st day of the Ethiopian month in Gregorian calendar
-      // This is the month start date (e.g., 1/1/2018, 2/1/2018, 3/1/2018)
-      const monthStartDate = new Date(ethiopianNewYear);
-      monthStartDate.setDate(monthStartDate.getDate() + daysFromNewYear);
+      // 1st day of the Ethiopian month in Gregorian calendar
+      const monthStartDate = toGregorian(ethiopianYear, monthNumber, 1);
+      // Normalize to NOON local time so the date displays correctly in any timezone
+      monthStartDate.setHours(12, 0, 0, 0);
       
       // Due date = 1st of Ethiopian month + Grace period days
-      // Example: Meskerem 1/1/2018 + 15 days = 1/16/2018
-      //          Tikimt 2/1/2018 + 15 days = 2/16/2018
       const dueDate = new Date(monthStartDate);
       dueDate.setDate(dueDate.getDate() + gracePeriod);
       
@@ -374,11 +378,18 @@ router.post('/generate-all', authenticateWithBranch, requirePermission(FINANCE_P
           // Create invoice number
           const invoiceNumber = `INV-${Date.now()}-${student.id.replace(/[^a-zA-Z0-9]/g, '')}-M${monthIndex + 1}`;
 
+          // Generate unique 10-digit invoice reference code
+          const { generateUniqueInvoiceRefCode } = require('../utils/invoiceRefCode');
+          const invoiceRefCode = await generateUniqueInvoiceRefCode(async (code) => {
+            const existing = await prisma.invoice.findUnique({ where: { invoiceRefCode: code } });
+            return !!existing;
+          });
+
           // Get academic year ID from fee structure
           const academicYearId = feeStructure.academicYearId;
           const campusId = feeStructure.campusId || '00000000-0000-0000-0000-000000000001';
 
-          // Calculate invoice amount - add registration fee to first month only
+          // Calculate invoice amount - add registration fee to first month only (default to newRegistrationFee)
           const isFirstMonth = monthIndex === 0;
           const invoiceAmount = isFirstMonth ? monthlyAmount + registrationFee : monthlyAmount;
 
@@ -407,6 +418,7 @@ router.post('/generate-all', authenticateWithBranch, requirePermission(FINANCE_P
           const invoice = await prisma.invoice.create({
             data: {
               invoiceNumber: invoiceNumber,
+              invoiceRefCode: invoiceRefCode,
               studentId: studentId,
               academicYearId: academicYearId,
               termId: null,
@@ -426,6 +438,8 @@ router.post('/generate-all', authenticateWithBranch, requirePermission(FINANCE_P
                 monthNumber: targetMonth,
                 monthIndex: monthIndex + 1,
                 totalMonths: selectedMonths.length,
+                oldRegistrationFee: isFirstMonth ? oldRegistrationFee : 0,
+                newRegistrationFee: isFirstMonth ? newRegistrationFee : 0,
                 isAutoGenerated: true,
                 registrationFee: isFirstMonth ? registrationFee : 0
               },
@@ -468,18 +482,22 @@ router.post('/generate-all', authenticateWithBranch, requirePermission(FINANCE_P
         totalErrorCount,
         errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
         monthlyResults: monthlyResults,
-        summary: {
-          message: regenerate 
-            ? `Regenerated ${totalSuccessCount} invoices for ${studentsToProcess.length} students across ${selectedMonths.length} months`
-            : `Generated ${totalSuccessCount} invoices for ${studentsToProcess.length} new students across ${selectedMonths.length} months`,
-          monthlyFee: monthlyAmount,
-          registrationFee: registrationFee,
-          firstMonthTotal: monthlyAmount + registrationFee,
-          totalPerStudent: (monthlyAmount * selectedMonths.length) + registrationFee,
-          balanceAccumulation: 'Automatic - unpaid amounts will accumulate each month with late fees',
-          newStudents: studentsToProcess.length,
-          existingStudents: students.length - studentsToProcess.length
-        }
+          summary: {
+            message: regenerate 
+              ? `Regenerated ${totalSuccessCount} invoices for ${studentsToProcess.length} students across ${selectedMonths.length} months`
+              : `Generated ${totalSuccessCount} invoices for ${studentsToProcess.length} new students across ${selectedMonths.length} months`,
+            monthlyFee: monthlyAmount,
+            registrationFee: registrationFee,
+            oldRegistrationFee: oldRegistrationFee,
+            newRegistrationFee: newRegistrationFee,
+            firstMonthTotal: monthlyAmount + registrationFee,
+            firstMonthOldTotal: monthlyAmount + oldRegistrationFee,
+            firstMonthNewTotal: monthlyAmount + newRegistrationFee,
+            totalPerStudent: (monthlyAmount * selectedMonths.length) + registrationFee,
+            balanceAccumulation: 'Automatic - unpaid amounts will accumulate each month with late fees',
+            newStudents: studentsToProcess.length,
+            existingStudents: students.length - studentsToProcess.length
+          }
       }
     });
 

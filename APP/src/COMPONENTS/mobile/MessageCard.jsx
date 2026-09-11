@@ -27,7 +27,7 @@ const MessageCard = ({ message, showTeacherInfo = true }) => {
   };
 
   const handleDownload = (attachment) => {
-    window.open(`https://v2.skoolific.com/api/class-communication/attachments/${attachment.id}`, '_blank');
+    window.open(`/api/class-communication/attachments/${attachment.id}`, '_blank');
   };
 
   return (
@@ -54,7 +54,7 @@ const MessageCard = ({ message, showTeacherInfo = true }) => {
               {isImageFile(att.file_type) ? (
                 <div className={styles.imagePreview}>
                   <img 
-                    src={`https://v2.skoolific.com/api/class-communication/attachments/${att.id}`}
+                    src={`/api/class-communication/attachments/${att.id}`}
                     alt={att.original_name}
                     className={styles.thumbnailImage}
                   />

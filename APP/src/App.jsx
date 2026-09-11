@@ -30,6 +30,7 @@ const ModernDashboard = lazy(() => import("./PAGE/Dashboard/ModernDashboard"));
 const AboutUs = lazy(() => import("./PAGE/AboutUs/AboutUs"));
 const Setting = lazy(() => import("./PAGE/Setting/Setting"));
 const Diagnostics = lazy(() => import("./PAGE/Diagnostics/Diagnostics"));
+const DataBackup = lazy(() => import("./PAGE/Backup/DataBackup"));
 
 // Student Management
 const CreateRegisterStudent = lazy(() => import("./PAGE/CreateRegister/CreateRegisterStudent/CreateRegisterStudent"));
@@ -53,6 +54,7 @@ const EvaluationFormDisplay = lazy(() => import("./PAGE/Evaluation/EvaluationFor
 const EvaluationDetailsView = lazy(() => import("./PAGE/Evaluation/EvaluationDetailsView"));
 const MarkListView = lazy(() => import("./PAGE/MarkListView/MarkListView"));
 const StudentAttendanceSystem = lazy(() => import("./PAGE/Academic/StudentAttendanceSystem"));
+const StudentAttendanceTimeSettings = lazy(() => import("./PAGE/Academic/StudentAttendanceTimeSettings"));
 // AI Module
 const AIDashboard = lazy(() => import("./PAGE/AI/AIDashboard"));
 const AIBookUpload = lazy(() => import("./PAGE/AI/BookUpload"));
@@ -64,6 +66,9 @@ const AIWorksheet = lazy(() => import("./PAGE/AI/Generators/Worksheet"));
 const AIQuiz = lazy(() => import("./PAGE/AI/Generators/Quiz"));
 const AIExam = lazy(() => import("./PAGE/AI/Generators/Exam"));
 const AIScrambleExam = lazy(() => import("./PAGE/AI/Generators/ScrambleExam"));
+const AITestGenerator = lazy(() => import("./PAGE/AI/Generators/TestGenerator"));
+const AITests = lazy(() => import("./PAGE/AI/Generators/AITests"));
+const AITestPlayer = lazy(() => import("./PAGE/AI/Generators/TestPlayer"));
 const MarkListSystem = lazy(() => import("./PAGE/CreateMarklist/CreateMarklist/CreateMarklist"));
 const MarkListManagement = lazy(() => import("./PAGE/CreateMarklist/MarkListManagement"));
 const SubjectMappingSetup = lazy(() => import("./PAGE/CreateMarklist/SubjectMappingSetup"));
@@ -173,9 +178,11 @@ const FinanceReports = lazy(() => import("./PAGE/Finance/FinanceReports"));
 const ComingSoon = lazy(() => import("./PAGE/Finance/ComingSoon"));
 const MonthlyPayments = lazy(() => import("./PAGE/Finance/MonthlyPaymentsNew"));
 const MonthlyPaymentSettings = lazy(() => import("./PAGE/Finance/MonthlyPaymentSettings"));
+const StudentExemption = lazy(() => import("./PAGE/Finance/StudentExemption"));
 
 // Report Pages
 const StudentsReport = lazy(() => import("./PAGE/Reports/StudentsReport"));
+const RegistrationReport = lazy(() => import("./PAGE/Reports/RegistrationReport"));
 const StaffReport = lazy(() => import("./PAGE/Reports/StaffReport"));
 const AcademicReport = lazy(() => import("./PAGE/Reports/AcademicReport"));
 const AttendanceReport = lazy(() => import("./PAGE/Reports/AttendanceReport"));
@@ -184,8 +191,31 @@ const EvaluationsReport = lazy(() => import("./PAGE/Reports/EvaluationsReport"))
 
 // Faults Page
 const FaultsPage = lazy(() => import("./PAGE/Faults/FaultsPage"));
+const SmsTemplates = lazy(() => import("./PAGE/SmsTemplates/SmsTemplates"));
+const SmsCounter = lazy(() => import("./PAGE/SmsCounter/SmsCounter"));
 // Super Admin
 const SuperAdmin = lazy(() => import("./PAGE/SuperAdmin/SuperAdmin"));
+
+// Finance App
+const FinanceApp = lazy(() => import("./PAGE/FinanceApp/FinanceApp"));
+const SuperFinanceApp = lazy(() => import("./PAGE/SuperFinanceApp/SuperFinanceApp"));
+const SuperFinance = lazy(() => import("./PAGE/SuperFinance/SuperFinance"));
+
+// Inventory & Asset Pages
+const InventoryDashboard = lazy(() => import("./PAGE/Inventory/InventoryDashboard"));
+const ItemMaster = lazy(() => import("./PAGE/Inventory/ItemMaster"));
+const PurchaseOrders = lazy(() => import("./PAGE/Inventory/PurchaseOrders"));
+const StockMovements = lazy(() => import("./PAGE/Inventory/StockMovements"));
+const SupplierManagement = lazy(() => import("./PAGE/Inventory/SupplierManagement"));
+const InventoryReports = lazy(() => import("./PAGE/Inventory/InventoryReports"));
+
+const AssetDashboard = lazy(() => import("./PAGE/Assets/AssetDashboard"));
+const AssetRegistry = lazy(() => import("./PAGE/Assets/AssetRegistry"));
+const AssetAssignment = lazy(() => import("./PAGE/Assets/AssetAssignment"));
+const AssetMaintenance = lazy(() => import("./PAGE/Assets/AssetMaintenance"));
+const AssetDepreciation = lazy(() => import("./PAGE/Assets/AssetDepreciation"));
+const AssetDisposal = lazy(() => import("./PAGE/Assets/AssetDisposal"));
+const AssetReports = lazy(() => import("./PAGE/Assets/AssetReports"));
 
 // HR & Staff Management Module
 const HRDashboard = lazy(() => import("./PAGE/HR/HRDashboard"));
@@ -229,6 +259,10 @@ function App() {
               <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
+          <Route path="/super-admin" element={<SuperAdmin />} />
+          <Route path="/finance-app" element={<Navigate to="/app/finance/" replace />} />
+          <Route path="/app/finance-login" element={<Navigate to="/app/finance/login" replace />} />
+          <Route path="/super-finance" element={<LazyRoute component={SuperFinance} />} />
           <Route path="/about-us" element={<Suspense fallback={<PageLoader />}><AboutUs /></Suspense>} />
           <Route path="/diagnostics" element={<Suspense fallback={<PageLoader />}><Diagnostics /></Suspense>} />
           
@@ -254,6 +288,7 @@ function App() {
               
               {/* Report Pages */}
               <Route path="reports/students" element={<LazyRoute component={StudentsReport} />} />
+              <Route path="reports/registrations" element={<LazyRoute component={RegistrationReport} />} />
               <Route path="reports/staff" element={<LazyRoute component={StaffReport} />} />
               <Route path="reports/academic" element={<LazyRoute component={AcademicReport} />} />
               <Route path="reports/attendance" element={<LazyRoute component={AttendanceReport} />} />
@@ -297,7 +332,7 @@ function App() {
               <Route path="kg/assignments" element={<KGAssignmentsPlaceholder />} />
               <Route path="mark-list-view" element={<MarkListView />} />
               <Route path="student-attendance-system" element={<StudentAttendanceSystem />} />
-              <Route path="student-attendance-time-settings" element={<Navigate to="/student-attendance-system" replace />} />
+              <Route path="student-attendance-time-settings" element={<StudentAttendanceTimeSettings />} />
               <Route path="ai/dashboard" element={<AIDashboard />} />
               <Route path="ai/books/upload" element={<AIBookUpload />} />
               <Route path="ai/books" element={<AIBookList />} />
@@ -308,6 +343,10 @@ function App() {
               <Route path="ai/generate/quiz" element={<AIQuiz />} />
               <Route path="ai/generate/exam" element={<AIExam />} />
               <Route path="ai/generate/scramble-exam" element={<AIScrambleExam />} />
+              <Route path="ai/test-generator" element={<AITestGenerator />} />
+              <Route path="ai-test-generator" element={<AITestGenerator />} />
+              <Route path="ai-tests" element={<AITests />} />
+              <Route path="ai-test-player" element={<AITestPlayer />} />
               <Route path="class-teacher-assignment" element={<ClassTeacherAssignment />} />
               <Route path="live-attendance" element={<LiveAttendanceMonitor />} />
               <Route path="communication" element={<AdminChat />} />
@@ -322,6 +361,10 @@ function App() {
               <Route path="admin-sub-accounts" element={<AdminSubAccounts />} />
               {/* Payment route removed */}
               <Route path="settings" element={<Setting />} />
+              <Route path="sms-templates" element={<SmsTemplates />} />
+              <Route path="sms" element={<SmsTemplates />} />
+              <Route path="sms-counter" element={<SmsCounter />} />
+              <Route path="backup" element={<DataBackup />} />
               {/* Branch-create route removed */}
               <Route path="schedule" element={<ScheduleDashboard />} />
               <Route path="schedule/Timetable" element={<ScheduleTimetable />} />
@@ -338,6 +381,7 @@ function App() {
               <Route path="finance/invoices" element={<InvoiceManagement />} />
               <Route path="finance/payments" element={<FeePaymentManagement />} />
               <Route path="finance/monthly-payments" element={<MonthlyPayments />} />
+              <Route path="finance/student-exemption" element={<StudentExemption />} />
               <Route path="finance/monthly-payment-settings" element={<MonthlyPaymentSettings />} />
               <Route path="hr/expenses" element={<ExpenseManagement />} />
               <Route path="hr/expense-approval" element={<ExpenseApproval />} />
@@ -350,28 +394,28 @@ function App() {
               <Route path="finance/expense-approval" element={<Navigate to="/hr/expense-approval" replace />} />
               <Route path="finance/budgets" element={<Navigate to="/hr/budgets" replace />} />
               
-              {/* Inventory Module Routes - Coming Soon */}
-              <Route path="inventory" element={<ComingSoon title="Inventory Dashboard" description="Manage your school's inventory and stock items." />} />
-              <Route path="inventory/items" element={<ComingSoon title="Items Management" description="Add and manage inventory items." />} />
-              <Route path="inventory/purchase-orders" element={<ComingSoon title="Purchase Orders" description="Create and track purchase orders." />} />
-              <Route path="inventory/movements" element={<ComingSoon title="Stock Movements" description="Track stock movements and transfers." />} />
-              <Route path="inventory/suppliers" element={<ComingSoon title="Supplier Management" description="Manage your suppliers and vendors." />} />
-              <Route path="inventory/reports" element={<ComingSoon title="Inventory Reports" description="View inventory analytics and reports." />} />
+              {/* Inventory Module Routes */}
+              <Route path="inventory" element={<LazyRoute component={InventoryDashboard} />} />
+              <Route path="inventory/items" element={<LazyRoute component={ItemMaster} />} />
+              <Route path="inventory/purchase-orders" element={<LazyRoute component={PurchaseOrders} />} />
+              <Route path="inventory/movements" element={<LazyRoute component={StockMovements} />} />
+              <Route path="inventory/suppliers" element={<LazyRoute component={SupplierManagement} />} />
+              <Route path="inventory/reports" element={<LazyRoute component={InventoryReports} />} />
               
-              {/* Asset Management Module Routes - Coming Soon */}
-              <Route path="assets" element={<ComingSoon title="Asset Dashboard" description="Overview of all school assets." />} />
-              <Route path="assets/registry" element={<ComingSoon title="Asset Registry" description="Register and manage school assets." />} />
-              <Route path="assets/assignments" element={<ComingSoon title="Asset Assignments" description="Assign assets to staff and departments." />} />
-              <Route path="assets/maintenance" element={<ComingSoon title="Asset Maintenance" description="Track asset maintenance schedules." />} />
-              <Route path="assets/depreciation" element={<ComingSoon title="Asset Depreciation" description="Calculate and track asset depreciation." />} />
-              <Route path="assets/disposal" element={<ComingSoon title="Asset Disposal" description="Manage asset disposal and write-offs." />} />
-              <Route path="assets/reports" element={<ComingSoon title="Asset Reports" description="View asset analytics and reports." />} />
+              {/* Asset Management Module Routes */}
+              <Route path="assets" element={<LazyRoute component={AssetDashboard} />} />
+              <Route path="assets/registry" element={<LazyRoute component={AssetRegistry} />} />
+              <Route path="assets/assignments" element={<LazyRoute component={AssetAssignment} />} />
+              <Route path="assets/maintenance" element={<LazyRoute component={AssetMaintenance} />} />
+              <Route path="assets/depreciation" element={<LazyRoute component={AssetDepreciation} />} />
+              <Route path="assets/disposal" element={<LazyRoute component={AssetDisposal} />} />
+              <Route path="assets/reports" element={<LazyRoute component={AssetReports} />} />
               
               {/* HR & Staff Management Module Routes */}
               <Route path="hr" element={<HRDashboard />} />
               <Route path="hr/salary" element={<SalaryManagement />} />
               <Route path="hr/attendance" element={<AttendanceSystem />} />
-              <Route path="hr/device-status" element={<DeviceStatus />} />
+              <Route path="device-status" element={<DeviceStatus />} />
               <Route path="hr/attendance-deduction-settings" element={<AttendanceDeductionSettings />} />
               <Route path="hr/attendance-time-settings" element={<AttendanceTimeSettings />} />
               {/* Staff-specific timing redirected to combined time settings */}
@@ -385,7 +429,6 @@ function App() {
               
               {/* Student Faults — merged into Faults page */}
               <Route path="faults" element={<FaultsPage />} />
-              <Route path="super-admin" element={<SuperAdmin />} />
             </Route>
             <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>}>
               <Route index element={<PostStudents />} />
@@ -446,6 +489,12 @@ function App() {
             <Route path="/app/guardian-chat" element={<GuardianChat />} />
             <Route path="/app/staff" element={<StaffProfile />} />
             <Route path="/app/teacher-chat" element={<TeacherChat />} />
+            
+            {/* Finance App - standalone app for finance staff */}
+            <Route path="/app/finance/*" element={<FinanceApp />} />
+
+            {/* Super Finance App - standalone app for super finance staff (all branches) */}
+            <Route path="/app/super-finance/*" element={<SuperFinanceApp />} />
             
             {/* Legacy route redirects - for backward compatibility */}
             <Route path="/student-login" element={<Navigate to="/app/student-login" replace />} />

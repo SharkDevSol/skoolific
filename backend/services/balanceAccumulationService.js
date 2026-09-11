@@ -150,6 +150,13 @@ async function generateInvoiceWithBalance(studentId, feeStructureId, monthNumber
     // Create invoice number
     const invoiceNumber = `INV-${Date.now()}-${studentId.replace(/[^a-zA-Z0-9]/g, '')}`;
 
+    // Generate unique 10-digit invoice reference code
+    const { generateUniqueInvoiceRefCode } = require('../utils/invoiceRefCode');
+    const invoiceRefCode = await generateUniqueInvoiceRefCode(async (code) => {
+      const existing = await prisma.invoice.findUnique({ where: { invoiceRefCode: code } });
+      return !!existing;
+    });
+
     // Set due date (30 days from now for regular months, 5 days for Pagume)
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + (monthNumber === 13 ? 5 : 30));
@@ -194,6 +201,7 @@ async function generateInvoiceWithBalance(studentId, feeStructureId, monthNumber
     const invoice = await prisma.invoice.create({
       data: {
         invoiceNumber: invoiceNumber,
+        invoiceRefCode: invoiceRefCode,
         studentId: studentId,
         feeStructureId: feeStructureId,
         issueDate: new Date(),

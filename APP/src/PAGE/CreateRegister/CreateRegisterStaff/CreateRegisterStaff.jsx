@@ -12,7 +12,8 @@ import {
   BookOpen,
   Plus,
   Trash2,
-  X
+  X,
+  DollarSign
 } from 'lucide-react';
 import styles from './CreateRegisterStaff.module.css';
 
@@ -24,12 +25,13 @@ import { useToast } from '../../../COMPONENTS/Toast/useToast';
 import ToastContainer from '../../../COMPONENTS/Toast/ToastContainer';
 import StaffForm from './StaffForm';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com/api';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
 
 const STAFF_TYPES = [
   { id: 'Supportive Staff', labelKey: 'supportive', icon: Briefcase },
   { id: 'Administrative Staff', labelKey: 'administrative', icon: Shield },
-  { id: 'Teachers', labelKey: 'teacher', icon: BookOpen }
+  { id: 'Teachers', labelKey: 'teacher', icon: BookOpen },
+  { id: 'Finance', labelKey: 'finance', icon: DollarSign }
 ];
 
 const CreateRegisterStaff = () => {

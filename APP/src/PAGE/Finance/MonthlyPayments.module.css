@@ -446,6 +446,17 @@
   letter-spacing: 0.5px;
 }
 
+.methodBadge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #ede9fe;
+  color: #5b21b6;
+  text-transform: capitalize;
+}
+
 .statusPAID {
   background: #c6f6d5;
   color: #22543d;
@@ -1626,4 +1637,185 @@
   font-weight: bold;
   margin: 10px 0;
   line-height: 1;
+}
+
+.regFeeToggle {
+  display: flex;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.toggleBtn {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: #f9f9f9;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.toggleBtn:hover {
+  border-color: #667eea;
+  background: #f0f2ff;
+}
+
+.toggleActive {
+  border-color: #667eea;
+  background: #eef1ff;
+  color: #4338ca;
+  box-shadow: 0 2px 8px rgba(102,126,234,0.2);
+}
+
+/* ============ Skoolific Finance - Dark Mode Overrides ============ */
+:global(.finance-dark) .container {
+  background: linear-gradient(180deg, #0b1120 0%, #111827 100%);
+}
+
+:global(.finance-dark) .invoiceDetails,
+:global(.finance-dark) .studentHeader,
+:global(.finance-dark) .invoiceList,
+:global(.finance-dark) .lockedRow,
+:global(.finance-dark) .monthSelection,
+:global(.finance-dark) .historyItem,
+:global(.finance-dark) .lockedInput,
+:global(.finance-dark) .fileInput,
+:global(.finance-dark) .circlesLegend,
+:global(.finance-dark) .disabled {
+  background: #1e293b !important;
+  color: #e2e8f0;
+}
+
+:global(.finance-dark) .toggleBtn {
+  background: #16203a;
+  color: #cbd5e1;
+}
+
+:global(.finance-dark) .toggleActive {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: #8b5cf6;
+  color: #a78bfa;
+}
+
+:global(.finance-dark) .hint,
+:global(.finance-dark) .className,
+:global(.finance-dark) .selectionSummary,
+:global(.finance-dark) .totalAmount {
+  background: #16203a;
+  color: #cbd5e1;
+}
+
+:global(.finance-dark) .overdueRow {
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+:global(.finance-dark) .overdueItem {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+:global(.finance-dark) .exemptRow {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.22) 0%, rgba(109, 40, 217, 0.12) 100%) !important;
+}
+
+:global(.finance-dark) .selected {
+  background: rgba(66, 153, 225, 0.2);
+  color: #93c5fd;
+}
+
+:global(.finance-dark) .paymentInfo {
+  background: rgba(20, 184, 166, 0.15);
+  color: #5eead4;
+}
+
+/* ============ Dark Mode Text Color Overrides ============ */
+:global(.finance-dark) .header h1,
+:global(.finance-dark) .header p,
+:global(.finance-dark) .subtitle,
+:global(.finance-dark) .cardSubtext,
+:global(.finance-dark) .invoiceItemInfo,
+:global(.finance-dark) .label,
+:global(.finance-dark) .fieldHint,
+:global(.finance-dark) .historyStatus {
+  color: #94a3b8 !important;
+}
+
+:global(.finance-dark) .exportButton,
+:global(.finance-dark) .select,
+:global(.finance-dark) .filterBtn,
+:global(.finance-dark) .filterSelect,
+:global(.finance-dark) .dateInput,
+:global(.finance-dark) .monthName,
+:global(.finance-dark) .historyMonth,
+:global(.finance-dark) .legendItem {
+  color: #e2e8f0 !important;
+}
+
+:global(.finance-dark) .bigNumber,
+:global(.finance-dark) .value,
+:global(.finance-dark) .invoiceItemAmount {
+  color: #f1f5f9 !important;
+}
+
+:global(.finance-dark) .className {
+  color: #cbd5e1 !important;
+}
+
+:global(.finance-dark) .statusPAID,
+:global(.finance-dark) .statusPaid {
+  color: #4ade80 !important;
+}
+
+:global(.finance-dark) .statusPARTIALLY_PAID,
+:global(.finance-dark) .statusPartial {
+  color: #fbbf24 !important;
+}
+
+:global(.finance-dark) .statusISSUED,
+:global(.finance-dark) .statusPending {
+  color: #60a5fa !important;
+}
+
+:global(.finance-dark) .statusOVERDUE,
+:global(.finance-dark) .statusOverdue {
+  color: #f87171 !important;
+}
+
+:global(.finance-dark) .card,
+:global(.finance-dark) .cardInfo,
+:global(.finance-dark) .cardSuccess,
+:global(.finance-dark) .cardWarning,
+:global(.finance-dark) .cardDanger {
+  color: #e2e8f0 !important;
+}
+
+:global(.finance-dark) .cancelButton {
+  color: #e2e8f0 !important;
+  background: #1e293b !important;
+}
+
+:global(.finance-dark) .lockedInput {
+  color: #cbd5e1 !important;
+}
+
+:global(.finance-dark) .monthCard,
+:global(.finance-dark) .monthOption {
+  color: #e2e8f0 !important;
+}
+
+:global(.finance-dark) .tab,
+:global(.finance-dark) .tabs {
+  color: #cbd5e1 !important;
+}
+
+:global(.finance-dark) .filterBar h3,
+:global(.finance-dark) .filterBar label {
+  color: #e2e8f0 !important;
+}
+
+:global(.finance-dark) .studentIdCell,
+:global(.finance-dark) .studentNameCell {
+  color: #e2e8f0 !important;
 }

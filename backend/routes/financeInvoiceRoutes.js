@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
-const prisma = new PrismaClient();
+const { branchPrisma: prisma } = require('../services/BranchPrismaService');
 
 // Security middleware
 const { authenticateWithBranch, validateBranchCode } = require('../middleware/branchAuth');
@@ -230,8 +229,14 @@ router.get('/', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS.IN
       prisma.invoice.count({ where })
     ]);
 
+    // Add computed `balance` so pages can render it directly
+    const withBalance = invoices.map(inv => ({
+      ...inv,
+      balance: Math.max(0, (parseFloat(inv.netAmount) || 0) - (parseFloat(inv.paidAmount) || 0)).toFixed(2)
+    }));
+
     res.json({
-      data: invoices,
+      data: withBalance,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

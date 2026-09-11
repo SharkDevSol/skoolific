@@ -9,9 +9,9 @@
 
 .label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .required {
@@ -27,24 +27,27 @@
 
 .input {
   width: 100%;
-  padding: 10px 16px;
+  padding: 14px 16px;
   font-size: 16px;
+  font-weight: 500;
   border: 2px solid var(--border-primary);
   border-radius: var(--radius-md);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: #ffffff;
+  color: #111827;
   transition: all var(--transition-base);
   font-family: inherit;
+  min-height: 50px;
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
 }
 
 .input::placeholder {
-  color: var(--text-tertiary);
+  color: #94a3b8;
+  font-weight: 400;
 }
 
 .input:disabled {

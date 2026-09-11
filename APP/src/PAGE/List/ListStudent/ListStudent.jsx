@@ -1,6 +1,7 @@
 // ListStudent.jsx - Modern Student List with File Display
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FiUsers, FiSearch, FiFilter, FiEye, FiEyeOff, FiEdit2, FiUserX, FiUserCheck, 
@@ -12,6 +13,7 @@ import Webcam from 'react-webcam';
 import { getFileType, getFileIcon, isFileField, getFileUrl, formatLabel, getFileName, looksLikeFile } from '../utils/fileUtils';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../../../context/AppContext';
+import { getBranchCode } from '../../../utils/branchCode';
 import styles from './ListStudent.module.css';
 
 import Table from '../../../COMPONENTS/Table/Table';
@@ -20,7 +22,7 @@ import Select from '../../../COMPONENTS/Select/Select';
 import Button from '../../../COMPONENTS/Button/Button';
 
 // API base URL - use environment variable or fallback to localhost
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com/api';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
 
 const ListStudent = () => {
   const { t: tApp } = useApp();
@@ -44,6 +46,7 @@ const ListStudent = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({});
   const [editFile, setEditFile] = useState(null);
+  const [editFileField, setEditFileField] = useState({});
   const [showCamera, setShowCamera] = useState(false);
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
@@ -68,7 +71,7 @@ const ListStudent = () => {
       const response = await axios.get(`${API_BASE_URL}/student-list/classes`);
       setClasses(response.data);
       if (response.data.length > 0) setSelectedClass(response.data[0]);
-      const formRes = await axios.get(`${API_BASE_URL}/students/form-structure`);
+      const formRes = await axios.get(`${API_BASE_URL}/students/form-structure`, { headers: { 'x-branch-code': (getBranchCode() || '').toUpperCase() } });
       setCustomFields(formRes.data?.customFields || []);
     } catch (error) { console.error('Error:', error); }
   };
@@ -109,12 +112,66 @@ const ListStudent = () => {
     setCurrentPage(1);
   };
 
+  const handleExportExcel = () => {
+    if (filteredStudents.length === 0) {
+      alert('No students to export');
+      return;
+    }
+    const rows = filteredStudents.map(student => {
+      const row = {};
+      Object.entries(student).forEach(([key, value]) => {
+        if (['uniqueId', 'displayId', 'id'].includes(key)) return;
+        if (typeof value === 'object' && value !== null) {
+          row[formatLabel(key)] = '';
+          return;
+        }
+        row[formatLabel(key)] = value ?? '';
+      });
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Students');
+    const filename = `students_${selectedClass || 'all'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  };
+
   const getColumnType = (key) => {
     if (key === 'image_student') return 'image';
-    if (key.includes('date') || key.includes('dob')) return 'date';
     if (key.includes('password')) return 'password';
     const cf = customFields.find(f => f.name === key);
-    return cf?.type || 'text';
+    if (cf?.type) return cf.type;
+    const lower = key.toLowerCase();
+    if (lower.includes('date') || lower.includes('dob') || lower.includes('birth')) return 'date';
+    if (lower.includes('number') || lower.includes('age') || lower.includes('count')) return 'number';
+    if (lower.includes('checkbox') || lower.includes('bool') || lower.includes('flag') || lower.startsWith('is_')) return 'checkbox';
+    if (lower.includes('textarea') || lower.includes('description') || lower.includes('bio') || lower.includes('reason')) return 'textarea';
+    if (lower.includes('multi') || lower.includes('options')) return 'multi-select';
+    if (lower.includes('select') || lower.includes('dropdown') || lower.includes('choice') || lower.includes('gender') || lower.includes('relation') || lower.includes('type')) return 'select';
+    if (lower.includes('upload') || lower.includes('file') || lower.includes('photo')) return 'upload';
+    return 'text';
+  };
+
+  const getFieldOptions = (col) => {
+    const cf = customFields.find(f => f.name === col.key);
+    if (cf && Array.isArray(cf.options) && cf.options.length > 0) return cf.options;
+    const lower = col.key.toLowerCase();
+    if (lower.includes('gender')) return ['Male', 'Female'];
+    if (lower.includes('relation')) return ['Father', 'Mother', 'Guardian', 'Other'];
+    if (lower.includes('blood')) return ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    return null;
+  };
+
+  const isCheckboxChecked = (val) => {
+    return val === true || val === 'true' || val === 'TRUE' || val === '1' || val === 'YES' || val === 'yes' || val === 'on';
+  };
+
+  const handleFieldFileChange = (e, field) => {
+    const file = e.target.files[0];
+    if (file) {
+      setEditFileField(prev => ({ ...(prev || {}), [field]: file }));
+      setEditFormData(prev => ({ ...prev, [field]: file.name }));
+    }
   };
 
   const getStudentFiles = (student) => {
@@ -185,6 +242,7 @@ const ListStudent = () => {
     setSelectedStudent(student); 
     setEditFormData(student); 
     setEditFile(null); 
+    setEditFileField({});
     setShowEditModal(true); 
   };
 
@@ -219,12 +277,23 @@ const ListStudent = () => {
       if (selectedStudent.school_id && selectedStudent.class_id) {
         const formData = new FormData();
         Object.entries(editFormData).forEach(([key, value]) => {
-          if (!['uniqueId', 'displayId', 'id'].includes(key) && value != null) formData.append(key, value.toString());
+          // Skip image_student text field - it's sent as a file below
+          if (['uniqueId', 'displayId', 'id', 'image_student'].includes(key)) return;
+          if (value != null) formData.append(key, value.toString());
         });
         if (editFile) formData.append('image_student', editFile);
+        if (editFileField && Object.keys(editFileField).length > 0) {
+          Object.entries(editFileField).forEach(([key, file]) => formData.append(key, file));
+        }
         await axios.put(`${API_BASE_URL}/student-list/student/${selectedClass}/${selectedStudent.school_id}/${selectedStudent.class_id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        // Refetch the students list to get the correct server-side image path
+        if (editFormData.class && editFormData.class !== selectedClass) {
+          // Student was transferred to a new class — switch to that class view
+          setSelectedClass(editFormData.class);
+        } else {
+          await fetchStudents(selectedClass);
+        }
       }
-      setStudents(prev => prev.map(s => s.uniqueId === selectedStudent.uniqueId ? { ...editFormData, uniqueId: s.uniqueId, displayId: s.displayId } : s));
       setShowEditModal(false);
     } catch (error) { alert('Failed to update'); }
     finally { setLoading(false); }
@@ -238,10 +307,11 @@ const ListStudent = () => {
       key: 'photo', header: 'Photo', width: '80px', sortable: false,
       render: (_, student) => {
         const isInactive = student.is_active === false || student.is_active === 'false';
+        const photoUrl = getFileUrl(student.image_student, 'student');
         return (
           <div className={styles.tableImageWrapper}>
-            {student.image_student ? (
-              <img src={getFileUrl(student.image_student, 'student')} alt="" className={styles.tableImage} />
+            {photoUrl ? (
+              <img src={photoUrl} alt="" className={styles.tableImage} />
             ) : (
               <div className={styles.tableAvatar}><FiUser /></div>
             )}
@@ -298,6 +368,29 @@ const ListStudent = () => {
         ) : '-';
       }
     },
+    // Dynamic columns for custom form fields (e.g. Warning, Old Or New, etc.)
+    ...customFields
+      .filter(field => field && field.name && !['image_student', 'student_name', 'smachine_id', 'age', 'gender', 'class', 'guardian_name', 'guardian_phone', 'guardian_relation', 'username', 'password', 'guardian_username', 'guardian_password', 'is_active', 'is_free', 'exemption_type', 'exemption_reason'].includes(field.name.toLowerCase()))
+      .map(field => ({
+        key: field.name.toLowerCase(),
+        header: field.label || formatLabel(field.name),
+        sortable: false,
+        render: (value) => {
+          if (value === null || value === undefined || value === '') return '-';
+          if (typeof value === 'boolean') {
+            return value
+              ? <span className={`${styles.tableBadge} ${styles.badgeSuccess}`}>Yes</span>
+              : <span className={styles.tableBadge}>No</span>;
+          }
+          if (value === true || value === 'true' || value === 'on' || value === 'YES') {
+            return <span className={`${styles.tableBadge} ${styles.badgeSuccess}`}>Yes</span>;
+          }
+          if (value === false || value === 'false' || value === 'off' || value === 'NO' || value === 'no') {
+            return <span className={styles.tableBadge}>No</span>;
+          }
+          return String(value);
+        }
+      })),
     {
       key: 'actions', header: 'Actions', sortable: false, align: 'right',
       render: (_, student) => {
@@ -420,6 +513,13 @@ const ListStudent = () => {
           {t('refresh') || 'Refresh'}
         </Button>
         <Button 
+          variant="secondary" 
+          onClick={handleExportExcel}
+          icon={<FiDownload />}
+        >
+          Download Excel
+        </Button>
+        <Button 
           variant={showInactive ? "primary" : "secondary"}
           onClick={() => setShowInactive(!showInactive)}
           icon={showInactive ? <FiUserCheck /> : <FiUserX />}
@@ -452,7 +552,7 @@ const ListStudent = () => {
                   onClick={() => { setSelectedStudent(student); setShowModal(true); }}
                 >
                   <div className={styles.cardHeader}>
-                    {student.image_student ? (
+                    {getFileUrl(student.image_student, 'student') ? (
                       <img 
                         src={getFileUrl(student.image_student, 'student')} 
                         alt={student.student_name} 
@@ -599,7 +699,7 @@ const ListStudent = () => {
                 <FiX />
               </button>
               <div className={styles.modalHeader}>
-                {selectedStudent.image_student ? (
+                {getFileUrl(selectedStudent.image_student, 'student') ? (
                   <img 
                     src={getFileUrl(selectedStudent.image_student, 'student')} 
                     alt="" 
@@ -626,11 +726,15 @@ const ListStudent = () => {
                   <h3><FiUser /> {t('basicInformation')}</h3>
                   <div className={styles.infoGrid}>
                     {Object.entries(selectedStudent)
-                      .filter(([key, value]) => !isFileField(key) && !looksLikeFile(value) && !['uniqueId', 'displayId', 'id', 'password', 'guardian_password'].includes(key))
+                      .filter(([key, value]) => !isFileField(key) && !looksLikeFile(value) && !['uniqueId', 'displayId', 'id', 'password', 'guardian_password', 'username', 'guardian_username'].includes(key))
                       .map(([key, value]) => (
                         <div key={key} className={styles.infoRow}>
                           <span className={styles.infoLabel}>{formatLabel(key)}</span>
-                          <span className={styles.infoValue}>{value || '-'}</span>
+                          <span className={styles.infoValue}>
+                            {typeof value === 'boolean'
+                              ? (value ? 'Yes' : 'No')
+                              : (value || '-')}
+                          </span>
                         </div>
                       ))
                     }
@@ -702,7 +806,12 @@ const ListStudent = () => {
 
                 {/* Documents Section */}
                 {(() => {
-                  const fileFields = Object.entries(selectedStudent).filter(([key, value]) => value && (isFileField(key) || looksLikeFile(value)));
+                  const PLACEHOLDERS = new Set(['{}', '[]', '[object Object]', 'null', 'undefined', '']);
+                  const fileFields = Object.entries(selectedStudent).filter(([key, value]) => 
+                    value && 
+                    !PLACEHOLDERS.has(String(value).trim()) && 
+                    (isFileField(key) || looksLikeFile(value))
+                  );
                   if (fileFields.length === 0) return null;
                   return (
                     <div className={styles.modalSection}>
@@ -801,11 +910,12 @@ const ListStudent = () => {
                 <div className={styles.editFields}>
                   {allColumns
                     .filter(col => 
-                      !isFileField(col.key) && 
                       col.type !== 'password' && 
                       !['uniqueId', 'displayId', 'id', 'image_student'].includes(col.key)
                     )
-                    .map(col => (
+                    .map(col => {
+                      const fieldOptions = getFieldOptions(col);
+                      return (
                       <div key={col.key} className={styles.editField}>
                         <label>{col.label}</label>
                         {col.type === 'checkbox' ? (
@@ -813,23 +923,68 @@ const ListStudent = () => {
                             <input 
                               type="checkbox"
                               name={col.key} 
-                              checked={editFormData[col.key] === 'true' || editFormData[col.key] === true || editFormData[col.key] === 'YES'}
+                              checked={isCheckboxChecked(editFormData[col.key])}
                               onChange={(e) => setEditFormData(prev => ({ ...prev, [col.key]: e.target.checked ? 'YES' : 'NO' }))}
                             />
-                            <span>{editFormData[col.key] === 'true' || editFormData[col.key] === true || editFormData[col.key] === 'YES' ? 'YES' : 'NO'}</span>
+                            <span>{isCheckboxChecked(editFormData[col.key]) ? 'YES' : 'NO'}</span>
                           </div>
-                        ) : col.type === 'select' || col.type === 'dropdown' ? (
+                        ) : col.type === 'multi-select' ? (
+                          <div className={styles.checkboxWrapper}>
+                            {(fieldOptions || []).map(opt => (
+                              <label key={opt} className={styles.multiOption}>
+                                <input
+                                  type="checkbox"
+                                  checked={(editFormData[col.key] || '').toString().split(',').map(s => s.trim()).includes(opt)}
+                                  onChange={(e) => {
+                                    const current = (editFormData[col.key] || '').toString().split(',').map(s => s.trim()).filter(Boolean);
+                                    const next = e.target.checked ? [...current, opt] : current.filter(v => v !== opt);
+                                    setEditFormData(prev => ({ ...prev, [col.key]: next.join(', ') }));
+                                  }}
+                                />
+                                <span>{opt}</span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : col.key === 'class' ? (
                           <select
-                            name={col.key}
-                            value={editFormData[col.key] || ''}
+                            name="class"
+                            value={editFormData.class || ''}
                             onChange={handleEditChange}
                           >
-                            <option value="">Select...</option>
-                            {/* Add options based on custom field definition */}
-                            {customFields.find(f => f.name === col.key)?.options?.map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
+                            {classes.map(cls => (
+                              <option key={cls} value={cls}>{cls}</option>
                             ))}
                           </select>
+                        ) : col.type === 'select' || col.type === 'dropdown' ? (
+                          fieldOptions ? (
+                            <select
+                              name={col.key}
+                              value={editFormData[col.key] || ''}
+                              onChange={handleEditChange}
+                            >
+                              <option value="">Select...</option>
+                              {fieldOptions.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              name={col.key}
+                              value={editFormData[col.key] || ''}
+                              onChange={handleEditChange}
+                            />
+                          )
+                        ) : col.type === 'upload' ? (
+                          <div className={styles.fileUploadField}>
+                            <label className={styles.fileUploadBtn}>
+                              <FiUpload /> Choose File
+                              <input type="file" onChange={(e) => handleFieldFileChange(e, col.key)} hidden />
+                            </label>
+                            <span className={styles.fileUploadName}>
+                              {editFileField[col.key] ? editFileField[col.key].name : (editFormData[col.key] || 'No file selected')}
+                            </span>
+                          </div>
                         ) : col.type === 'textarea' ? (
                           <textarea
                             name={col.key}
@@ -846,7 +1001,8 @@ const ListStudent = () => {
                           />
                         )}
                       </div>
-                    ))
+                    );
+                    })
                   }
                 </div>
                 <div className={styles.editActions}>

@@ -35,8 +35,8 @@ const BASE_URLS = {
     frontend: process.env.FRONTEND_URL || 'http://localhost:5173'
   },
   production: {
-    backend: process.env.BACKEND_URL || 'https://v2.skoolific.com',
-    frontend: process.env.FRONTEND_URL || 'https://v2.skoolific.com'
+    backend: process.env.BACKEND_URL || 'https://iqra.skoolific.com',
+    frontend: process.env.FRONTEND_URL || 'https://iqra.skoolific.com'
   },
   test: {
     backend: process.env.BACKEND_URL || 'http://localhost:5052',
@@ -112,8 +112,7 @@ const API_ENDPOINTS = {
     BY_ID: (id) => `/api/guardian-list/${id}`,
     ATTENDANCE: '/api/guardian-attendance',
     STUDENT_ATTENDANCE: '/api/guardian-student-attendance',
-    PAYMENTS: '/api/guardian-payments',
-    NOTIFICATIONS: '/api/guardian-notifications'
+    PAYMENTS: '/api/guardian-payments'
   },
 
   // Attendance Management

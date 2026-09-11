@@ -241,6 +241,7 @@ model LateFeeRule {
 model Invoice {
   id             String        @id @default(uuid()) @db.Uuid
   invoiceNumber  String        @unique
+  invoiceRefCode String?       @unique  // 10-digit invoice reference shown on the voucher
   receiptNumber  String?       @unique  // Permanent receipt number for paid invoices
   studentId      String        @db.Uuid
   academicYearId String        @db.Uuid

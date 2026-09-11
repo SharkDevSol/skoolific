@@ -30,11 +30,16 @@ const validateBranchCode = async (req, res, next) => {
       branchCode = req.query.branchCode;
     }
 
+    // Priority 4: Get from request body (login form sends branchCode in body)
+    if (!branchCode && req.body && req.body.branchCode) {
+      branchCode = req.body.branchCode;
+    }
+
     // If no branch code provided, return error
     if (!branchCode) {
       return res.status(400).json({ 
         error: 'Branch code is required',
-        message: 'Please provide branch code in header (x-branch-code), query parameter (?branchCode=XXX), or login with branch code'
+        message: 'Branch code not found. Send it via X-Branch-Code header, ?branchCode=XXX query, or in the request body.'
       });
     }
 
@@ -44,6 +49,17 @@ const validateBranchCode = async (req, res, next) => {
         error: 'Invalid branch code format',
         message: 'Branch code must be 2-5 uppercase letters/numbers (e.g., MAI, DB1, SKL)'
       });
+    }
+
+    // Super Finance accounts may only use branches listed in their token
+    if (req.user && req.user.role === 'super_finance' &&
+        Array.isArray(req.user.allowedBranches) && req.user.allowedBranches.length > 0) {
+      if (!req.user.allowedBranches.includes(branchCode)) {
+        return res.status(403).json({
+          error: 'Branch not allowed',
+          message: `This super finance account cannot access branch ${branchCode}`
+        });
+      }
     }
 
     // Get database pool for this branch
@@ -79,6 +95,15 @@ const validateBranchCode = async (req, res, next) => {
 const authenticateWithBranch = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  // Read-only GET requests (e.g. guardian/student viewing mark lists, report cards)
+  // may proceed with branch-code validation alone. This lets guardians and students
+  // view their own data without a short-lived JWT. Write operations (POST/PUT/DELETE)
+  // still require a valid token below.
+  const isReadOnly = req.method === 'GET';
+  if (!token && isReadOnly) {
+    return validateBranchCode(req, res, next);
+  }
 
   if (!token) {
     return res.status(401).json({ 

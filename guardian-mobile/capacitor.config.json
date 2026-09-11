@@ -1,0 +1,28 @@
+{
+  "appId": "com.skoolific.guardian",
+  "appName": "IQRA Parent",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "url": "https://iqra.skoolific.com/app/guardian-login",
+    "cleartext": false,
+    "clearCache": true,
+    "allowNavigation": [
+      "iqra.skoolific.com",
+      "*.skoolific.com"
+    ]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#4c1d95",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#4c1d95"
+    }
+  }
+}

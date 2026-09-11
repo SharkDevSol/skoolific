@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../../utils/api';
 import { getCurrentEthiopianMonth, getCurrentEthiopianMonthRange } from '../../../utils/ethiopianCalendar';
 
-const STAFF_TYPES = ['Teachers', 'Supportive Staff', 'Administrative Staff'];
+const STAFF_TYPES = ['Teachers', 'Supportive Staff', 'Administrative Staff', 'Finance'];
 
 const CalculateAttendanceDeductionsModal = ({ onClose }) => {
   const [allStaff, setAllStaff] = useState([]);

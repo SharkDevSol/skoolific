@@ -1,16 +1,33 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
 import styles from './MonthlyPayments.module.css';
 import api from '../../utils/api';
 import InvoiceReceipt from '../../COMPONENTS/InvoiceReceipt';
 import { numberToWords, generateReceiptNumber } from '../../utils/numberToWords';
+import { buildReceiptHtml } from '../../utils/receiptTemplate';
 import { 
   gregorianToEthiopian, 
+  ethiopianToGregorian,
   getCurrentEthiopianMonth, 
+  getEthiopianDate,
   formatEthiopianDate as formatEthDate 
 } from '../../utils/ethiopianCalendar';
 
+// Local (school-local, UTC+3) date string in YYYY-MM-DD — avoids the UTC
+// toISOString() bug where early-morning payments recorded the previous day.
+const getLocalDateStr = () => {
+  const d = new Date(Date.now() + 3 * 3600 * 1000); // Ethiopia = UTC+3
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const MonthlyPaymentsNew = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const [overview, setOverview] = useState(null);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classDetails, setClassDetails] = useState(null);
@@ -47,17 +64,25 @@ const MonthlyPaymentsNew = () => {
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
     paymentMethod: 'CASH',
-    paymentDate: new Date().toISOString().split('T')[0],
+    paymentDate: getLocalDateStr(),
     reference: '',
     screenshot: null,
     notes: ''
   });
+  const [regFeeType, setRegFeeType] = useState('new');
   const [showExemptionModal, setShowExemptionModal] = useState(false);
   const [exemptionForm, setExemptionForm] = useState({
     is_free: false,
     exemption_type: '',
-    exemption_reason: ''
+    exemption_reason: '',
+    registration_fee_type: 'new'
   });
+  // Check Invoice by 10-digit reference code
+  const [showInvoiceLookupModal, setShowInvoiceLookupModal] = useState(false);
+  const [invoiceLookupCode, setInvoiceLookupCode] = useState('');
+  const [invoiceLookupLoading, setInvoiceLookupLoading] = useState(false);
+  const [invoiceLookupResult, setInvoiceLookupResult] = useState(null);
+  const [invoiceLookupError, setInvoiceLookupError] = useState('');
 
   const ethiopianMonths = [
     'Meskerem', 'Tikimt', 'Hidar', 'Tahsas', 'Tir', 'Yekatit',
@@ -66,7 +91,10 @@ const MonthlyPaymentsNew = () => {
 
   // Format Ethiopian date as string
   const formatEthiopianDate = (gregorianDate) => {
-    const eth = gregorianToEthiopian(gregorianDate);
+    if (!gregorianDate) return 'Unknown';
+    const dateObj = typeof gregorianDate === 'string' ? new Date(gregorianDate) : gregorianDate;
+    if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return 'Invalid date';
+    const eth = gregorianToEthiopian(dateObj);
     const monthName = ethiopianMonths[eth.month - 1] || 'Unknown';
     return `${eth.day}/${eth.month}/${eth.year} (${monthName})`;
   };
@@ -83,12 +111,13 @@ const MonthlyPaymentsNew = () => {
     }
 
     const monthNumber = invoice.metadata.monthNumber;
-    const ethiopianNewYear = new Date(2025, 8, 11); // September 11, 2025
     
-    // Calculate month start date
-    const daysFromNewYear = (monthNumber - 1) * 30;
-    const monthStartDate = new Date(ethiopianNewYear);
-    monthStartDate.setDate(monthStartDate.getDate() + daysFromNewYear);
+    // Get current Ethiopian year to compute accurate Gregorian dates
+    const ethNow = getEthiopianDate();
+    const ethiopianYear = ethNow.year;
+    
+    // Calculate month start date using the Ethiopian calendar utility
+    const monthStartDate = ethiopianToGregorian(ethiopianYear, monthNumber, 1);
 
     // Calculate due dates for each active late fee rule
     const dueDates = lateFeeRules.map(rule => {
@@ -106,13 +135,13 @@ const MonthlyPaymentsNew = () => {
   };
 
   const paymentMethods = [
-    { value: 'CASH', label: 'Cash', requiresReference: false },
-    { value: 'CBE', label: 'CBE Bank', requiresReference: true },
-    { value: 'ABAY', label: 'Abay Bank', requiresReference: true },
-    { value: 'ABYSSINIA', label: 'Abyssinia Bank', requiresReference: true },
-    { value: 'EBIRR', label: 'E-Birr', requiresReference: true },
-    { value: 'MOBILE_MONEY', label: 'Mobile Money', requiresReference: true },
-    { value: 'ONLINE', label: 'Online Payment', requiresReference: true }
+    { value: 'CASH', label: t('financeApp.shell.methods.cash'), requiresReference: false },
+    { value: 'CBE', label: t('financeApp.shell.methods.cbe'), requiresReference: true },
+    { value: 'ABAY', label: t('financeApp.shell.methods.abay'), requiresReference: true },
+    { value: 'ABYSSINIA', label: t('financeApp.shell.methods.abyssinia'), requiresReference: true },
+    { value: 'EBIRR', label: t('financeApp.shell.methods.eBirr'), requiresReference: true },
+    { value: 'MOBILE_MONEY', label: t('financeApp.shell.methods.mobileMoney'), requiresReference: true },
+    { value: 'ONLINE', label: t('financeApp.shell.methods.online'), requiresReference: true }
   ];
 
   useEffect(() => {
@@ -193,7 +222,7 @@ const MonthlyPaymentsNew = () => {
       setClassDetails(response.data);
     } catch (error) {
       console.error('Error fetching class details:', error);
-      alert('Failed to fetch class details');
+      alert(t('financeApp.pay3.failedFetchClassDetails'));
     } finally {
       setLoading(false);
     }
@@ -218,7 +247,8 @@ const MonthlyPaymentsNew = () => {
               setExemptionForm({
                 is_free: studentResponse.data.is_free || false,
                 exemption_type: studentResponse.data.exemption_type || '',
-                exemption_reason: studentResponse.data.exemption_reason || ''
+                exemption_reason: studentResponse.data.exemption_reason || '',
+                registration_fee_type: studentResponse.data.registration_fee_type || 'new'
               });
             }
           }
@@ -228,7 +258,7 @@ const MonthlyPaymentsNew = () => {
       }
     } catch (error) {
       console.error('Error fetching student details:', error);
-      alert('Failed to fetch student details');
+      alert(t('financeApp.pay3.failedFetchStudentDetails'));
     } finally {
       setLoading(false);
     }
@@ -241,7 +271,7 @@ const MonthlyPaymentsNew = () => {
       setShowPaymentHistoryModal(true);
     } catch (error) {
       console.error('Error fetching payment history:', error);
-      alert('Failed to fetch payment history');
+      alert(t('financeApp.pay3.failedFetchHistory'));
     }
   };
 
@@ -251,14 +281,14 @@ const MonthlyPaymentsNew = () => {
       setMultipleMonthlyReport(response.data);
     } catch (error) {
       console.error('Error fetching multiple monthly report:', error);
-      alert('Failed to fetch report');
+      alert(t('financeApp.pay3.failedFetchReport'));
     }
   };
 
   const fetchSchoolInfo = async () => {
     try {
-      const response = await api.get('/api/settings/branding');
-      const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://v2.skoolific.com';
+      const response = await api.get('/settings/branding');
+      const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
       setSchoolInfo({
         logo: response.data.logo ? `${API_BASE}${response.data.logo}` : null,
         nameEn: response.data.schoolName || 'Dugsiga Barbaarinta Caruurta, Hoose, Dhexe & Sare Ee Iqra',
@@ -295,10 +325,10 @@ const MonthlyPaymentsNew = () => {
       return;
     }
 
-    const receiptElement = componentRef.current.querySelector('[class*="receipt"]');
+    const receiptElement = componentRef.current.querySelector('[class*="receipt"], [class*="voucher"]');
     if (!receiptElement) {
       console.error('Receipt element not found');
-      alert('Error: Receipt content not found. Please try again.');
+      alert(t('financeApp.pay3.receiptNotFound'));
       return;
     }
 
@@ -328,7 +358,7 @@ const MonthlyPaymentsNew = () => {
     // Create a new window for printing
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     if (!printWindow) {
-      alert('Please allow popups to print receipts');
+      alert(t('financeApp.pay3.allowPopups'));
       return;
     }
 
@@ -342,19 +372,20 @@ const MonthlyPaymentsNew = () => {
           <title>Receipt - ${receiptData?.receiptNumber || 'DRAFT'}</title>
           <style>
             @page {
-              size: A4;
-              margin: 0;
+              size: A5 landscape;
+              margin: 8mm;
             }
             body {
               margin: 0;
-              padding: 20px;
+              padding: 0;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
-              background: white;
-              font-family: Arial, sans-serif;
+              background: #F2E7CE;
+              font-family: 'Helvetica Neue', Arial, sans-serif;
             }
             @media print {
               body {
+                background: #F2E7CE;
                 padding: 0;
               }
             }
@@ -382,23 +413,65 @@ const MonthlyPaymentsNew = () => {
     }, 500);
   };
 
-  const saveReceiptNumber = async (receiptNumber) => {
-    try {
-      await api.post('/finance/monthly-payments-view/receipts/save-number', { receiptNumber });
-    } catch (error) {
-      console.error('Error saving receipt number:', error);
-    }
-  };
+  // Open the receipt voucher (exact design) in a new window.
+  // autoPrint = true  → opens + prints
+  // autoPrint = false → opens for preview only (Show Receipt)
+  const openReceiptVoucher = (invoice, autoPrint) => {
+    if (!invoice) return;
 
-  const prepareAndPrintReceipt = async (invoice) => {
-    console.log('Preparing receipt for invoice:', invoice);
-    
     // Get student name from classDetails
     let studentName = 'Unknown';
     if (classDetails && classDetails.students) {
       const student = classDetails.students.find(s => s.studentId === selectedStudent);
       studentName = student?.studentName || 'Unknown';
     }
+
+    const amount = invoice.paidAmount || invoice.totalAmount || 0;
+    const studentIdText = invoice.studentId || selectedStudent || '';
+    const classNameText = classDetails?.summary?.className || '';
+
+    // Use the FIXED payment date (when the student paid), never today's date.
+    // The date must not change day by day — it stays as the payment date.
+    const receiptDate = invoice.paidDate
+      ? new Date(invoice.paidDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const html = buildReceiptHtml({
+      date: receiptDate,
+      receiptNumber: invoice.receiptNumber || invoice.invoiceNumber || '',
+      from: studentName,
+      purpose: invoice.month ? `Monthly Tuition Fee - ${invoice.month}` : 'Monthly Tuition Fee',
+      invoiceRef: invoice.invoiceNumber || '',
+      invoiceRefCode: invoice.invoiceRefCode || '',
+      remainder: invoice.paidAmount > 0 && invoice.totalAmount > 0
+        ? `${Math.max(0, invoice.totalAmount - invoice.paidAmount).toFixed(2)} Birr`
+        : '',
+      amountWords: numberToWords(amount),
+      amountFigures: amount.toFixed(2),
+      cashier: '' // Cashier signs manually - leave empty
+    });
+
+    const win = window.open('', '_blank', 'width=1100,height=700');
+    if (!win) {
+      alert(t('financeApp.pay3.allowPopupsView'));
+      return;
+    }
+
+    win.document.write(html);
+    win.document.close();
+
+    if (autoPrint) {
+      setTimeout(() => {
+        win.focus();
+        win.print();
+        setTimeout(() => win.close(), 100);
+      }, 500);
+    }
+  };
+
+  // Print receipt using the exact voucher design
+  const prepareAndPrintReceipt = async (invoice) => {
+    console.log('Preparing receipt for invoice:', invoice);
 
     // Try to get existing receipt number for this invoice from backend
     let receiptNumber;
@@ -429,41 +502,83 @@ const MonthlyPaymentsNew = () => {
       }
     }
 
-    // Prepare receipt data
-    const receipt = {
-      receiptNumber: receiptNumber,
-      date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      studentName: studentName,
-      studentId: selectedStudent,
-      className: classDetails?.summary?.className || 'Unknown',
-      monthsPaid: [invoice.month],
-      amountInWords: numberToWords(invoice.paidAmount),
-      amountInFigures: invoice.paidAmount.toFixed(2),
-      paymentMethod: 'Cash',
-      cashierName: 'School Cashier',
-      invoiceNumber: invoice.invoiceNumber
-    };
+    openReceiptVoucher({ ...invoice, receiptNumber }, true);
+  };
 
-    console.log('Receipt data prepared:', receipt);
-    console.log('School info:', schoolInfo);
-    
-    // Set receipt data
-    setReceiptData(receipt);
+  // Show receipt preview (no auto print)
+  const showReceipt = async (invoice) => {
+    console.log('Showing receipt for invoice:', invoice);
 
-    // Wait for React to update the DOM with the new receipt data
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Verify the component ref is available
-    if (!componentRef.current) {
-      console.error('Component ref not available after state update');
-      alert('Error: Receipt component not ready. Please try again.');
+    let receiptNumber;
+    try {
+      const response = await api.get(`/finance/monthly-payments-view/invoice/${invoice.id}/receipt-number`);
+      if (response.data.receiptNumber) {
+        receiptNumber = response.data.receiptNumber;
+      }
+    } catch (error) {
+      console.log('No existing receipt number found, will generate new one');
+    }
+
+    if (!receiptNumber) {
+      receiptNumber = generateReceiptNumber(lastReceiptNumber);
+      setLastReceiptNumber(parseInt(receiptNumber));
+      try {
+        await api.post(`/finance/monthly-payments-view/invoice/${invoice.id}/receipt-number`, {
+          receiptNumber: receiptNumber
+        });
+      } catch (error) {
+        console.error('Error saving receipt number:', error);
+      }
+    }
+
+    openReceiptVoucher({ ...invoice, receiptNumber }, false);
+  };
+
+  const saveReceiptNumber = async (receiptNumber) => {
+    try {
+      await api.post('/finance/monthly-payments-view/receipts/save-number', { receiptNumber });
+    } catch (error) {
+      console.error('Error saving receipt number:', error);
+    }
+  };
+
+  // Look up an invoice by its 10-digit reference code (works across branches)
+  const handleInvoiceLookup = async (e) => {
+    if (e) e.preventDefault();
+    const code = invoiceLookupCode.trim().replace(/\D/g, '');
+    if (!/^\d{10}$/.test(code)) {
+      setInvoiceLookupError(t('financeApp.pay3.invalidInvoiceCode'));
+      setInvoiceLookupResult(null);
       return;
     }
-    
-    console.log('Component ref available, proceeding to print');
-    
-    // Trigger print
-    handlePrint();
+    setInvoiceLookupLoading(true);
+    setInvoiceLookupError('');
+    setInvoiceLookupResult(null);
+    try {
+      const response = await api.get(`/finance/monthly-payments-view/invoice-lookup/${code}`);
+      setInvoiceLookupResult(response.data.data);
+    } catch (error) {
+      const msg = error.response?.data?.message 
+        || error.response?.data?.error 
+        || t('financeApp.pay3.failedInvoiceLookup');
+      setInvoiceLookupError(msg);
+    } finally {
+      setInvoiceLookupLoading(false);
+    }
+  };
+
+  const closeInvoiceLookup = () => {
+    setShowInvoiceLookupModal(false);
+    setInvoiceLookupCode('');
+    setInvoiceLookupResult(null);
+    setInvoiceLookupError('');
+  };
+
+  const formatLookupDate = (dateStr) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   // Check if month is unlocked based on current Ethiopian calendar
@@ -479,14 +594,14 @@ const MonthlyPaymentsNew = () => {
     // }
 
     if (invoice.status === 'PAID') {
-      return { canPay: false, reason: 'Already paid' };
+      return { canPay: false, reason: t('financeApp.pay3.alreadyPaid') };
     }
 
     const previousMonths = allInvoices.filter(inv => inv.monthNumber < invoice.monthNumber);
     const unpaidPrevious = previousMonths.find(inv => inv.status !== 'PAID');
     
     if (unpaidPrevious) {
-      return { canPay: false, reason: `Must pay ${unpaidPrevious.month} first` };
+      return { canPay: false, reason: t('financeApp.pay3.mustPayFirst', { month: unpaidPrevious.month }) };
     }
 
     return { canPay: true, reason: '' };
@@ -506,19 +621,34 @@ const MonthlyPaymentsNew = () => {
     }
   };
 
+  const calcRegAdjustedBalance = (invoice, rftype) => {
+    if (invoice.oldRegistrationFee !== undefined && invoice.newRegistrationFee !== undefined) {
+      // Strip the registration fee ACTUALLY applied to this invoice (student's stored fee type),
+      // then add the fee for the selected type. Fixes wrong amount for students registered
+      // under the OLD fee.
+      const appliedType = invoice.studentType || 'new';
+      const appliedReg = appliedType === 'old' ? invoice.oldRegistrationFee : invoice.newRegistrationFee;
+      const baseFee = invoice.netAmount - appliedReg;
+      const selectedReg = rftype === 'old' ? invoice.oldRegistrationFee : invoice.newRegistrationFee;
+      return Math.max(0, baseFee + selectedReg - invoice.paidAmount);
+    }
+    return invoice.balance;
+  };
+
   const handleRecordPayment = (invoice) => {
-    // Check if student can pay this month
     const paymentCheck = canPayMonth(invoice, studentDetails.invoices);
     if (!paymentCheck.canPay) {
-      alert(`Cannot pay this month: ${paymentCheck.reason}`);
+      alert(`${t('financeApp.pay3.cannotPayThisMonth')}${paymentCheck.reason}`);
       return;
     }
 
+    const defaultRegType = invoice.studentType || 'new';
+    setRegFeeType(defaultRegType);
     setSelectedInvoice(invoice);
     setPaymentForm({
-      amount: invoice.balance.toFixed(2), // Locked to exact balance
+      amount: calcRegAdjustedBalance(invoice, defaultRegType).toFixed(2),
       paymentMethod: 'CASH',
-      paymentDate: new Date().toISOString().split('T')[0],
+      paymentDate: getLocalDateStr(),
       reference: '',
       screenshot: null,
       notes: ''
@@ -549,7 +679,7 @@ const MonthlyPaymentsNew = () => {
     }
 
     if (availableMonths.length === 0) {
-      alert('No months available for payment');
+      alert(t('financeApp.pay3.noMonthsAvailable'));
       return;
     }
 
@@ -558,7 +688,7 @@ const MonthlyPaymentsNew = () => {
     setPaymentForm({
       amount: availableMonths[0].balance.toFixed(2),
       paymentMethod: 'CASH',
-      paymentDate: new Date().toISOString().split('T')[0],
+      paymentDate: getLocalDateStr(),
       reference: '',
       screenshot: null,
       notes: ''
@@ -569,18 +699,12 @@ const MonthlyPaymentsNew = () => {
   const handleSubmitPayment = async (e) => {
     e.preventDefault();
 
-    // Validate reference number for non-cash payments
+    // Validate reference uniqueness if provided
     const selectedMethod = paymentMethods.find(m => m.value === paymentForm.paymentMethod);
-    if (selectedMethod?.requiresReference && !paymentForm.reference) {
-      alert('Reference number is required for this payment method');
-      return;
-    }
-
-    // Check reference uniqueness for non-cash payments
-    if (selectedMethod?.requiresReference) {
+    if (selectedMethod?.requiresReference && paymentForm.reference) {
       const isUnique = await validateReference(paymentForm.reference, paymentForm.paymentMethod);
       if (!isUnique) {
-        alert('This reference number has already been used. Please enter a unique reference number.');
+        alert(t('financeApp.pay3.duplicateReference'));
         return;
       }
     }
@@ -592,17 +716,16 @@ const MonthlyPaymentsNew = () => {
       formData.append('amount', parseFloat(paymentForm.amount));
       formData.append('paymentMethod', paymentForm.paymentMethod);
       formData.append('paymentDate', new Date(paymentForm.paymentDate).toISOString());
+      if (selectedInvoice.oldRegistrationFee !== undefined) {
+        formData.append('registrationFeeType', regFeeType);
+      }
       if (paymentForm.reference) formData.append('reference', paymentForm.reference);
       if (paymentForm.notes) formData.append('notes', paymentForm.notes);
       if (paymentForm.screenshot) formData.append('screenshot', paymentForm.screenshot);
 
-      await api.post('/finance/payments', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      await api.post('/finance/payments', formData);
       
-      alert('Payment recorded successfully!');
+      alert(t('financeApp.pay3.paymentRecorded'));
       setShowPaymentModal(false);
       setSelectedInvoice(null);
       
@@ -616,7 +739,7 @@ const MonthlyPaymentsNew = () => {
       await fetchOverview();
     } catch (error) {
       console.error('Error recording payment:', error);
-      alert('Failed to record payment: ' + (error.response?.data?.message || error.message));
+      alert(t('financeApp.pay3.failedRecordPayment') + (error.response?.data?.message || error.message));
     }
   };
 
@@ -626,7 +749,7 @@ const MonthlyPaymentsNew = () => {
     // Validate reference number for non-cash payments
     const selectedMethod = paymentMethods.find(m => m.value === paymentForm.paymentMethod);
     if (selectedMethod?.requiresReference && !paymentForm.reference) {
-      alert('Reference number is required for this payment method');
+      alert(t('financeApp.pay3.referenceRequired'));
       return;
     }
 
@@ -634,34 +757,44 @@ const MonthlyPaymentsNew = () => {
     if (selectedMethod?.requiresReference) {
       const isUnique = await validateReference(paymentForm.reference, paymentForm.paymentMethod);
       if (!isUnique) {
-        alert('This reference number has already been used. Please enter a unique reference number.');
+        alert(t('financeApp.pay3.duplicateReference'));
         return;
       }
     }
 
     try {
-      // Pay each month sequentially
-      for (const invoice of selectedMonths) {
-        const formData = new FormData();
-        formData.append('invoiceId', invoice.id);
-        formData.append('amount', invoice.balance);
-        formData.append('paymentMethod', paymentForm.paymentMethod);
-        formData.append('paymentDate', new Date(paymentForm.paymentDate).toISOString());
-        if (paymentForm.reference) formData.append('reference', paymentForm.reference);
-        if (paymentForm.notes) formData.append('notes', paymentForm.notes);
-        if (paymentForm.screenshot) formData.append('screenshot', paymentForm.screenshot);
+      // ONE payment covering ALL selected months → ONE receipt + ONE SMS
+      const payload = {
+        invoiceIds: selectedMonths.map(inv => inv.id),
+        amounts: selectedMonths.map(inv => inv.balance),
+        paymentMethod: paymentForm.paymentMethod,
+        paymentDate: new Date(paymentForm.paymentDate).toISOString()
+      };
+      if (paymentForm.reference) payload.reference = paymentForm.reference;
+      if (paymentForm.notes) payload.notes = paymentForm.notes;
 
-        await api.post('/finance/payments', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-      }
-      
-      alert(`Successfully paid ${selectedMonths.length} months!`);
+      const response = await api.post('/finance/payments/multi', payload);
+
+      alert(t('financeApp.pay3.successfullyPaid', { count: selectedMonths.length }));
       setShowMultiMonthModal(false);
       setSelectedMonths([]);
-      
+
+      // Open the ONE receipt voucher for the whole batch (total + all months)
+      if (response.data?.data) {
+        const batch = response.data.data;
+        openReceiptVoucher({
+          id: selectedMonths[0].id,
+          studentId: selectedStudent,
+          paidDate: paymentForm.paymentDate,
+          paidAmount: batch.totalAmount,
+          totalAmount: batch.totalAmount,
+          receiptNumber: batch.receiptNumber,
+          month: (batch.months || []).filter(Boolean).join(' & '),
+          invoiceRefCode: (batch.invoiceRefCodes || []).filter(Boolean).join(', '),
+          invoiceRef: ''
+        }, true);
+      }
+
       // Refresh data
       if (selectedStudent) {
         await fetchStudentDetails();
@@ -672,7 +805,7 @@ const MonthlyPaymentsNew = () => {
       await fetchOverview();
     } catch (error) {
       console.error('Error recording multi-month payment:', error);
-      alert('Failed to record payment: ' + (error.response?.data?.message || error.message));
+      alert(t('financeApp.pay3.failedRecordPayment') + (error.response?.data?.message || error.message));
     }
   };
 
@@ -694,7 +827,7 @@ const MonthlyPaymentsNew = () => {
           .sort((a, b) => a.monthNumber - b.monthNumber)[0];
         
         if (invoice.id !== firstUnpaid.id) {
-          alert(`Please start with ${firstUnpaid.month} (the first unpaid month)`);
+          alert(t('financeApp.pay3.startWithMonth', { month: firstUnpaid.month }));
           return;
         }
         newSelection = [invoice];
@@ -706,7 +839,7 @@ const MonthlyPaymentsNew = () => {
           .sort((a, b) => a.monthNumber - b.monthNumber);
         
         if (nextMonths.length === 0 || nextMonths[0].id !== invoice.id) {
-          alert('Please select months in sequential order');
+          alert(t('financeApp.pay3.selectSequential'));
           return;
         }
         
@@ -740,13 +873,13 @@ const MonthlyPaymentsNew = () => {
   const getStatusText = (status) => {
     switch (status) {
       case 'PAID':
-        return '✓ Paid';
+        return t('financeApp.pay3.statusPaidShort');
       case 'PARTIALLY_PAID':
-        return '⚠ Partial';
+        return t('financeApp.pay3.statusPartialShort');
       case 'OVERDUE':
-        return '⚠ Overdue';
+        return t('financeApp.pay3.statusOverdueShort');
       case 'ISSUED':
-        return '○ Pending';
+        return t('financeApp.pay3.statusUnpaidShort');
       default:
         return status;
     }
@@ -816,7 +949,7 @@ const MonthlyPaymentsNew = () => {
     switch (cardType) {
       case 'TOTAL_STUDENTS':
         data = {
-          title: 'All Students',
+          title: t('financeApp.pay2.cardAllStudents'),
           students: classDetails.students.map(s => ({
             studentId: s.studentId,
             studentName: s.studentName,
@@ -830,7 +963,7 @@ const MonthlyPaymentsNew = () => {
 
       case 'PAID_STUDENTS':
         data = {
-          title: 'Paid Students',
+          title: t('financeApp.pay2.cardPaidStudents'),
           students: classDetails.students
             .filter(s => s.status === 'PAID')
             .map(s => ({
@@ -846,7 +979,7 @@ const MonthlyPaymentsNew = () => {
 
       case 'UNPAID_STUDENTS':
         data = {
-          title: 'Unpaid Students',
+          title: t('financeApp.pay2.cardUnpaidStudents'),
           students: classDetails.students
             .filter(s => s.status === 'UNPAID' || s.status === 'PARTIAL')
             .map(s => ({
@@ -863,7 +996,7 @@ const MonthlyPaymentsNew = () => {
 
       case 'TOTAL_AMOUNT':
         data = {
-          title: 'Total Amount Breakdown',
+          title: t('financeApp.pay2.totalAmountBreakdown'),
           students: classDetails.students.map(s => ({
             studentId: s.studentId,
             studentName: s.studentName,
@@ -877,7 +1010,7 @@ const MonthlyPaymentsNew = () => {
 
       case 'TOTAL_PAID':
         data = {
-          title: 'Total Paid Breakdown',
+          title: t('financeApp.pay2.totalPaidBreakdown'),
           students: classDetails.students
             .filter(s => s.unlockedTotalPaid > 0)
             .map(s => ({
@@ -893,7 +1026,7 @@ const MonthlyPaymentsNew = () => {
 
       case 'TOTAL_PENDING':
         data = {
-          title: 'Total Pending Breakdown',
+          title: t('financeApp.pay2.totalPendingBreakdown'),
           students: classDetails.students
             .filter(s => s.unlockedTotalBalance > 0)
             .map(s => ({
@@ -920,7 +1053,7 @@ const MonthlyPaymentsNew = () => {
   // Export to PDF function - Export all classes with student details
   const handleExportPDF = async () => {
     if (!overview) {
-      alert('No data to export');
+      alert(t('financeApp.pay3.noDataToExport'));
       return;
     }
 
@@ -994,16 +1127,16 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `all-classes-payment-report-${new Date().toISOString().split('T')[0]}.txt`;
+      a.download = `all-classes-payment-report-${getLocalDateStr()}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      alert('All classes report exported successfully!');
+      alert(t('financeApp.pay3.exportSuccess'));
     } catch (error) {
       console.error('Error exporting report:', error);
-      alert('Failed to export report. Please try again.');
+      alert(t('financeApp.pay3.exportFailed'));
     } finally {
       setLoading(false);
     }
@@ -1012,7 +1145,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
   // Export to Excel function - Export all classes with student details
   const handleExportExcel = async () => {
     if (!overview) {
-      alert('No data to export');
+      alert(t('financeApp.pay3.noDataToExport'));
       return;
     }
 
@@ -1058,16 +1191,16 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `all-classes-payment-report-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `all-classes-payment-report-${getLocalDateStr()}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      alert('All classes report exported successfully!');
+      alert(t('financeApp.pay3.exportSuccess'));
     } catch (error) {
       console.error('Error exporting report:', error);
-      alert('Failed to export report. Please try again.');
+      alert(t('financeApp.pay3.exportFailed'));
     } finally {
       setLoading(false);
     }
@@ -1105,8 +1238,8 @@ ${index + 1}. ${student.studentName || 'Unknown'}
     <div className={styles.container}>
       <div className={styles.header}>
         <div>
-          <h1>Monthly Payment Tracking</h1>
-          <p>View student balances and payment status</p>
+          <h1>{t('financeApp.pay1.title')}</h1>
+          <p>{t('financeApp.pay1.subtitle')}</p>
           <div style={{ 
             marginTop: '10px', 
             padding: '8px 15px', 
@@ -1117,41 +1250,52 @@ ${index + 1}. ${student.studentName || 'Unknown'}
             fontSize: '0.9em',
             fontWeight: '500'
           }}>
-            📅 Current Ethiopian Date: {(() => {
-              const current = getCurrentEthiopianMonth();
-              return `${current.day} ${current.monthName} ${current.year}`;
+            {t('financeApp.pay1.currentEthiopianDate')}{(() => {
+              const current = getEthiopianDate();
+              return `${current.day} ${current.monthNameEn} ${current.year}`;
             })()}
           </div>
         </div>
         <div className={styles.exportButtons}>
           <button 
             className={styles.exportButton}
-            onClick={() => handleExportPDF()}
-            title="Export to PDF"
+            onClick={() => {
+              setShowInvoiceLookupModal(true);
+              setInvoiceLookupError('');
+              setInvoiceLookupResult(null);
+            }}
+            title={t('financeApp.pay3.checkInvoiceTitle')}
           >
-            📄 Export PDF
+            🔍 {t('financeApp.pay3.checkInvoice')}
+          </button>
+          <button 
+            className={styles.exportButton}
+            onClick={() => handleExportPDF()}
+            title={t('financeApp.pay1.exportPdfTitle')}
+          >
+            {t('financeApp.pay1.exportPdf')}
           </button>
           <button 
             className={styles.exportButton}
             onClick={() => handleExportExcel()}
-            title="Export to Excel"
+            title={t('financeApp.pay1.exportExcelTitle')}
           >
-            📊 Export Excel
+            {t('financeApp.pay1.exportExcel')}
           </button>
         </div>
       </div>
 
-      {loading && <div className={styles.loading}>Loading...</div>}
+      {loading && <div className={styles.loading}>{t('financeApp.pay1.loading')}</div>}
 
       {/* Overview Section */}
       {overview && !selectedClass && !selectedStudent && (
         <div className={styles.overviewSection}>
-          <h2>Monthly Payments Overview</h2>
+          <h2>{t('financeApp.pay1.overviewTitle')}</h2>
           
           {/* No summary cards - go straight to classes */}
 
           <div className={styles.classesSection}>
-            <h2>Classes</h2>
+            <h2>{t('financeApp.pay1.classesTitle')}</h2>
             <div className={styles.classGrid}>
               {overview.classes.map((classData, index) => (
                 <div 
@@ -1162,15 +1306,15 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   <h3>{classData.className}</h3>
                   <div className={styles.classStats}>
                     <div className={styles.stat}>
-                      <span className={styles.label}>Total Students:</span>
+                      <span className={styles.label}>{t('financeApp.pay1.totalStudentsLabel')}</span>
                       <span className={styles.value}>{classData.totalStudents}</span>
                     </div>
                     <div className={styles.stat}>
-                      <span className={styles.label}>Unpaid Students:</span>
+                      <span className={styles.label}>{t('financeApp.pay1.unpaidStudentsLabel')}</span>
                       <span className={styles.value}>{classData.unpaidUnlockedStudents || 0}</span>
                     </div>
                   </div>
-                  <button className={styles.viewButton}>View Students →</button>
+                  <button className={styles.viewButton}>{t('financeApp.pay1.viewStudents')} →</button>
                 </div>
               ))}
             </div>
@@ -1186,45 +1330,45 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               setSelectedClass(null);
               setClassDetails(null);
             }}>
-              ← Back to Overview
+              {t('financeApp.pay1.backToOverview')}
             </button>
           </div>
 
-          <h2>{classDetails.summary.className} - Student Balances</h2>
+          <h2>{classDetails.summary.className}{t('financeApp.pay1.studentBalancesSuffix')}</h2>
 
           {/* Show only Unpaid Students count */}
           <div style={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center',
-            background: 'white',
+            background: 'var(--color-surface)',
             padding: '20px 30px',
             borderRadius: '12px',
             marginBottom: '20px',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)'
           }}>
             <div>
-              <h3 style={{ margin: '0 0 5px 0', color: '#718096', fontSize: '0.9em', fontWeight: '500' }}>Unpaid Students (Unlocked Months)</h3>
+              <h3 style={{ margin: '0 0 5px 0', color: '#718096', fontSize: '0.9em', fontWeight: '500' }}>{t('financeApp.pay1.unpaidUnlockedTitle')}</h3>
               <p style={{ margin: 0, fontSize: '2.5em', fontWeight: 'bold', color: '#dc3545' }}>
                 {classDetails.summary.unpaidCount + classDetails.summary.partialCount}
               </p>
               <p style={{ margin: '5px 0 0 0', fontSize: '0.85em', color: '#718096' }}>
-                Students with unpaid unlocked months only
+                {t('financeApp.pay1.unpaidUnlockedDesc')}
               </p>
             </div>
             <div style={{ fontSize: '4em', opacity: 0.2 }}>⚠️</div>
           </div>
 
           <div className={styles.filterBar}>
-            <h3>Filter Students:</h3>
+            <h3>{t('financeApp.pay1.filterStudents')}</h3>
             <select 
               value={classFilterStatus} 
               onChange={(e) => setClassFilterStatus(e.target.value)}
               className={styles.filterSelect}
             >
-              <option value="ALL">All Students</option>
-              <option value="PAID">Students with Paid Invoices</option>
-              <option value="UNPAID">Students with Unpaid Invoices</option>
+              <option value="ALL">{t('financeApp.pay1.allStudents')}</option>
+              <option value="PAID">{t('financeApp.pay1.studentsWithPaid')}</option>
+              <option value="UNPAID">{t('financeApp.pay1.studentsWithUnpaid')}</option>
             </select>
 
             <select 
@@ -1232,11 +1376,11 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               onChange={(e) => setDateFilter(e.target.value)}
               className={styles.filterSelect}
             >
-              <option value="ALL">All Time</option>
-              <option value="TODAY">Today</option>
-              <option value="THIS_WEEK">This Week</option>
-              <option value="THIS_MONTH">This Month</option>
-              <option value="CUSTOM">Custom Date Range</option>
+              <option value="ALL">{t('financeApp.pay1.allTime')}</option>
+              <option value="TODAY">{t('financeApp.pay1.today')}</option>
+              <option value="THIS_WEEK">{t('financeApp.pay1.thisWeek')}</option>
+              <option value="THIS_MONTH">{t('financeApp.pay1.thisMonth')}</option>
+              <option value="CUSTOM">{t('financeApp.pay1.customDateRange')}</option>
             </select>
 
             {dateFilter === 'CUSTOM' && (
@@ -1246,14 +1390,14 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
                   className={styles.dateInput}
-                  placeholder="Start Date"
+                  placeholder={t('financeApp.pay1.startDatePlaceholder')}
                 />
                 <input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
                   className={styles.dateInput}
-                  placeholder="End Date"
+                  placeholder={t('financeApp.pay1.endDatePlaceholder')}
                 />
               </>
             )}
@@ -1262,33 +1406,33 @@ ${index + 1}. ${student.studentName || 'Unknown'}
           <div className={styles.circlesLegend}>
             <div className={styles.legendItem}>
               <div className={`${styles.legendCircle} ${styles.circlePaid}`}></div>
-              <span>Paid Month</span>
+              <span>{t('financeApp.pay1.legendPaid')}</span>
             </div>
             <div className={styles.legendItem}>
               <div className={`${styles.legendCircle} ${styles.circleUnpaid}`}></div>
-              <span>Unpaid Month</span>
+              <span>{t('financeApp.pay1.legendUnpaid')}</span>
             </div>
             <div className={styles.legendItem}>
               <div className={`${styles.legendCircle} ${styles.circleLocked}`}></div>
-              <span>Locked Month</span>
+              <span>{t('financeApp.pay1.legendLocked')}</span>
             </div>
           </div>
 
           <div className={styles.studentsTable}>
-            <h3>Student List</h3>
+            <h3>{t('financeApp.pay1.studentList')}</h3>
             <table>
               <thead>
                 <tr>
-                  <th>Student ID</th>
-                  <th>Student Name</th>
-                  <th>Total Amount (Unlocked)</th>
-                  <th>Total Paid (All Months)</th>
-                  <th>Balance (Unlocked)</th>
-                  <th>Unpaid Months (Unlocked)</th>
-                  <th>Last Payment Date</th>
-                  <th>Status</th>
-                  <th>Payment Progress</th>
-                  <th>Actions</th>
+                  <th>{t('financeApp.pay1.thStudentId')}</th>
+                  <th>{t('financeApp.pay1.thStudentName')}</th>
+                  <th>{t('financeApp.pay1.thTotalAmount')}</th>
+                  <th>{t('financeApp.pay1.thTotalPaid')}</th>
+                  <th>{t('financeApp.pay1.thBalance')}</th>
+                  <th>{t('financeApp.pay1.thUnpaidMonths')}</th>
+                  <th>{t('financeApp.pay1.thLastPayment')}</th>
+                  <th>{t('financeApp.pay1.thStatus')}</th>
+                  <th>{t('financeApp.pay1.thProgress')}</th>
+                  <th>{t('financeApp.pay1.thActions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1298,7 +1442,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   <tr key={index} className={student.is_free ? styles.exemptRow : ''}>
                     <td>{student.studentId}</td>
                     <td>
-                      <strong>{student.studentName || 'Unknown'}</strong>
+                      <strong>{student.studentName || t('financeApp.shell.common.unknown')}</strong>
                       {student.is_free && (
                         <span 
                           style={{
@@ -1311,7 +1455,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                             fontWeight: 'bold',
                             display: 'inline-block'
                           }}
-                          title={`${student.exemption_type || 'Exempted'}: ${student.exemption_reason || 'No reason provided'}`}
+                          title={`${student.exemption_type || t('financeApp.pay1.exempted')}: ${student.exemption_reason || t('financeApp.pay1.noReason')}`}
                         >
                           🎓 {student.exemption_type || 'FREE'}
                         </span>
@@ -1319,23 +1463,23 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                     </td>
                     <td>
                       {student.is_free ? (
-                        <span style={{ color: '#667eea', fontWeight: 'bold' }}>EXEMPT</span>
+                        <span style={{ color: '#667eea', fontWeight: 'bold' }}>{t('financeApp.pay1.exempted')}</span>
                       ) : (
-                        `${student.unlockedTotalAmount.toFixed(2)} Birr`
+                        `${student.unlockedTotalAmount.toFixed(2)} ${t('financeApp.shell.common.birr')}`
                       )}
                     </td>
                     <td>
                       {student.is_free ? (
                         <span style={{ color: '#667eea', fontWeight: 'bold' }}>-</span>
                       ) : (
-                        <strong style={{ color: '#28a745' }}>{student.totalPaid.toFixed(2)} Birr</strong>
+                        <strong style={{ color: '#28a745' }}>{student.totalPaid.toFixed(2)} {t('financeApp.shell.common.birr')}</strong>
                       )}
                     </td>
                     <td>
                       {student.is_free ? (
                         <span style={{ color: '#667eea', fontWeight: 'bold' }}>-</span>
                       ) : (
-                        <strong>{student.unlockedTotalBalance.toFixed(2)} Birr</strong>
+                        <strong>{student.unlockedTotalBalance.toFixed(2)} {t('financeApp.shell.common.birr')}</strong>
                       )}
                     </td>
                     <td>
@@ -1351,12 +1495,12 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           {new Date(student.lastPaymentDate).toLocaleDateString()}
                         </span>
                       ) : (
-                        <span className={styles.noPayment}>No payment yet</span>
+                        <span className={styles.noPayment}>{t('financeApp.pay1.noPaymentYet')}</span>
                       )}
                     </td>
                     <td>
                       <span className={`${styles.statusBadge} ${getStatusColor(student.status)}`}>
-                        {student.is_free ? '🎓 EXEMPT' : getStatusText(student.status)}
+                        {student.is_free ? t('financeApp.pay3.exemptStatus') : getStatusText(student.status)}
                       </span>
                     </td>
                     <td>
@@ -1367,7 +1511,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                         className={styles.viewButton}
                         onClick={() => setSelectedStudent(student.studentId)}
                       >
-                        View Details
+                        {t('financeApp.pay1.viewDetails')}
                       </button>
                     </td>
                   </tr>
@@ -1375,7 +1519,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               </tbody>
             </table>
             {classDetails.students.filter(student => filterStudentsByStatus(student) && filterStudentsByDate(student)).length === 0 && (
-              <p className={styles.noResults}>No students found with selected filters</p>
+              <p className={styles.noResults}>{t('financeApp.pay1.noStudentsFound')}</p>
             )}
           </div>
         </div>
@@ -1389,11 +1533,11 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               setSelectedStudent(null);
               setStudentDetails(null);
             }}>
-              ← Back to Class
+              {t('financeApp.pay1.backToClass')}
             </button>
           </div>
 
-          <h2>Student: {selectedStudent}</h2>
+          <h2>{t('financeApp.pay1.studentPrefix')}{classDetails?.students?.find(s => s.studentId === selectedStudent)?.studentName || t('financeApp.shell.common.unknown')}</h2>
 
           {/* Show exemption notice if student is exempt */}
           {exemptionForm.is_free && (
@@ -1406,9 +1550,9 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               textAlign: 'center',
               boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
             }}>
-              <h3 style={{ margin: '0 0 10px 0', fontSize: '1.5em' }}>🎓 EXEMPT STUDENT</h3>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: '1.5em' }}>{t('financeApp.pay1.exemptStudent')}</h3>
               <p style={{ margin: '5px 0', fontSize: '1.1em', fontWeight: 'bold' }}>
-                {exemptionForm.exemption_type || 'Learning for Free'}
+                {exemptionForm.exemption_type || t('financeApp.pay1.learningForFree')}
               </p>
               {exemptionForm.exemption_reason && (
                 <p style={{ margin: '10px 0 0 0', fontSize: '0.95em', opacity: 0.9 }}>
@@ -1416,22 +1560,22 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 </p>
               )}
               <p style={{ margin: '15px 0 0 0', fontSize: '0.9em', opacity: 0.85 }}>
-                This student is exempt from all payment requirements
+                {t('financeApp.pay1.exemptDescription')}
               </p>
             </div>
           )}
 
           <div className={styles.summaryCards}>
             <div className={styles.card} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-              <h3 style={{ color: 'white', opacity: 0.9, fontSize: '0.9em', marginBottom: '10px' }}>Total Invoices</h3>
+              <h3 style={{ color: 'white', opacity: 0.9, fontSize: '0.9em', marginBottom: '10px' }}>{t('financeApp.pay1.totalInvoices')}</h3>
               <p className={styles.bigNumber} style={{ color: 'white' }}>{studentDetails.totalInvoices}</p>
             </div>
             <div className={`${styles.card} ${styles.cardWarning}`} style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white' }}>
-              <h3 style={{ color: 'white', opacity: 0.9, fontSize: '0.9em', marginBottom: '10px' }}>UNPAID MONTHS</h3>
+              <h3 style={{ color: 'white', opacity: 0.9, fontSize: '0.9em', marginBottom: '10px' }}>{t('financeApp.pay1.unpaidMonthsCard')}</h3>
               <p className={styles.bigNumber} style={{ color: 'white' }}>{studentDetails.unpaidMonths}</p>
             </div>
             <div className={`${styles.card} ${styles.cardInfo}`} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-              <h3 style={{ color: 'white', opacity: 0.9, fontSize: '0.9em', marginBottom: '10px' }}>CURRENT MONTH</h3>
+              <h3 style={{ color: 'white', opacity: 0.9, fontSize: '0.9em', marginBottom: '10px' }}>{t('financeApp.pay1.currentMonthCard')}</h3>
               <p className={styles.bigNumber} style={{ color: 'white' }}>{ethiopianMonths[currentEthiopianMonth - 1]}</p>
             </div>
           </div>
@@ -1445,9 +1589,9 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 opacity: exemptionForm.is_free ? 0.5 : 1,
                 cursor: exemptionForm.is_free ? 'not-allowed' : 'pointer'
               }}
-              title={exemptionForm.is_free ? 'Student is exempt from payments' : ''}
+              title={exemptionForm.is_free ? t('financeApp.pay1.exemptFromPayments') : ''}
             >
-              💰 Pay Multiple Months
+              {t('financeApp.pay1.payMultipleMonths')}
             </button>
             <button 
               className={styles.exemptionButton}
@@ -1464,7 +1608,23 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 fontWeight: '500'
               }}
             >
-              🎓 {exemptionForm.is_free ? `Free (${exemptionForm.exemption_type})` : 'Manage Exemption'}
+              🎓 {exemptionForm.is_free ? `${t('financeApp.pay1.freeButtonPrefix')}${exemptionForm.exemption_type})` : t('financeApp.pay1.manageExemption')}
+            </button>
+            <button
+              onClick={() => navigate('/finance/student-exemption')}
+              style={{
+                marginLeft: '10px',
+                background: 'transparent',
+                color: '#667eea',
+                border: '1px solid #667eea',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.95em',
+                fontWeight: '500'
+              }}
+            >
+              📋 {t('financeApp.pay1.exemptionPage') || 'All Exemptions'}
             </button>
             <div className={styles.filters}>
               <select 
@@ -1472,18 +1632,18 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className={styles.filterSelect}
               >
-                <option value="ALL">All Status</option>
-                <option value="PAID">Paid</option>
-                <option value="PARTIALLY_PAID">Partially Paid</option>
-                <option value="ISSUED">Pending</option>
-                <option value="OVERDUE">Overdue</option>
+                <option value="ALL">{t('financeApp.pay1.allStatus')}</option>
+                <option value="PAID">{t('financeApp.pay3.statusPaidShort')}</option>
+                <option value="PARTIALLY_PAID">{t('financeApp.pay1.partiallyPaid')}</option>
+                <option value="ISSUED">{t('financeApp.pay1.pendingLabel')}</option>
+                <option value="OVERDUE">{t('financeApp.pay3.statusOverdueShort')}</option>
               </select>
               <select 
                 value={filterMonth} 
                 onChange={(e) => setFilterMonth(e.target.value)}
                 className={styles.filterSelect}
               >
-                <option value="ALL">All Months</option>
+                <option value="ALL">{t('financeApp.pay1.allMonths')}</option>
                 {ethiopianMonths.map((month, index) => (
                   <option key={index} value={month}>{month}</option>
                 ))}
@@ -1492,19 +1652,19 @@ ${index + 1}. ${student.studentName || 'Unknown'}
           </div>
 
           <div className={styles.invoicesTable}>
-            <h3>Invoice Breakdown by Month</h3>
+            <h3>{t('financeApp.pay1.invoiceBreakdown')}</h3>
             <table>
               <thead>
                 <tr>
-                  <th>Month</th>
-                  <th>Invoice Number</th>
-                  <th>Amount</th>
-                  <th>Paid</th>
-                  <th>Balance</th>
-                  <th>Due Date</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                  <th>Print</th>
+                  <th>{t('financeApp.pay1.thMonth')}</th>
+                  <th>{t('financeApp.pay1.thInvoiceNumber')}</th>
+                  <th>{t('financeApp.pay1.thAmount')}</th>
+                  <th>{t('financeApp.pay1.thPaid')}</th>
+                  <th>{t('financeApp.pay1.thBalance')}</th>
+                  <th>{t('financeApp.pay1.thDueDate')}</th>
+                  <th>{t('financeApp.pay1.thStatus')}</th>
+                  <th>{t('financeApp.pay1.thAction')}</th>
+                  <th>{t('financeApp.pay1.thPrint')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1528,9 +1688,9 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           {locked && <span className={styles.lockIcon}> 🔒</span>}
                         </td>
                         <td>{invoice.invoiceNumber}</td>
-                        <td>{invoice.amount.toFixed(2)} Birr</td>
-                        <td>{invoice.paidAmount.toFixed(2)} Birr</td>
-                        <td><strong>{invoice.balance.toFixed(2)} Birr</strong></td>
+                        <td>{invoice.netAmount.toFixed(2)} {t('financeApp.shell.common.birr')}</td>
+                        <td>{invoice.paidAmount.toFixed(2)} {t('financeApp.shell.common.birr')}</td>
+                        <td><strong>{invoice.balance.toFixed(2)} {t('financeApp.shell.common.birr')}</strong></td>
                         <td>
                           <div style={{ fontSize: '0.9em' }}>
                             {invoice.multipleDueDates && invoice.multipleDueDates.length > 0 ? (
@@ -1541,7 +1701,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                                     {formatEthiopianDate(dueDateInfo.dueDate)}
                                     {invoice.multipleDueDates.length > 1 && (
                                       <span style={{ fontSize: '0.8em', color: '#666', marginLeft: '4px' }}>
-                                        ({dueDateInfo.ruleName}: +{dueDateInfo.penaltyValue} Birr)
+                                        ({dueDateInfo.ruleName}: +{dueDateInfo.penaltyValue} {t('financeApp.shell.common.birr')})
                                       </span>
                                     )}
                                   </div>
@@ -1565,39 +1725,48 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           <span className={`${styles.statusBadge} ${getStatusColor(invoice.status)}`}>
                             {getStatusText(invoice.status)}
                           </span>
-                          {invoice.isOverdue && <span className={styles.overdueLabel}> ⚠ Overdue</span>}
+                          {invoice.isOverdue && <span className={styles.overdueLabel}> {t('financeApp.pay3.statusOverdueShort')}</span>}
                         </td>
                         <td>
                           {invoice.balance > 0 ? (
                             exemptionForm.is_free ? (
                               <span className={styles.exemptLabel} style={{ color: '#667eea', fontWeight: 'bold' }}>
-                                🎓 Exempt
+                                {t('financeApp.pay3.statusExemptShort')}
                               </span>
                             ) : !paymentCheck.canPay ? (
                               <span className={styles.blockedLabel} title={paymentCheck.reason}>
-                                ⛔ Blocked
+                                {t('financeApp.pay3.statusBlockedShort')}
                               </span>
                             ) : (
                               <button 
                                 className={styles.payButton}
                                 onClick={() => handleRecordPayment(invoice)}
                               >
-                                Pay {locked && '🔒'}
+                                {t('financeApp.pay1.payPrefix')}{locked && '🔒'}
                               </button>
                             )
                           ) : (
-                            <span className={styles.paidLabel}>✓ Paid</span>
+                            <span className={styles.paidLabel}>{t('financeApp.pay3.statusPaidShort')}</span>
                           )}
                         </td>
                         <td>
                           {invoice.paidAmount > 0 ? (
-                            <button 
-                              className={styles.printButton}
-                              onClick={() => prepareAndPrintReceipt(invoice)}
-                              title="Print Receipt"
-                            >
-                              🖨️ Print
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                              <button 
+                                className={styles.printButton}
+                                onClick={() => prepareAndPrintReceipt(invoice)}
+                                title={t('financeApp.pay1.printReceipt')}
+                              >
+                                {t('financeApp.pay1.printShort')}
+                              </button>
+                              <button 
+                                className={styles.printButton}
+                                onClick={() => showReceipt(invoice)}
+                                title={t('financeApp.pay1.showReceiptPreview')}
+                              >
+                                {t('financeApp.pay1.showShort')}
+                              </button>
+                            </div>
                           ) : (
                             <span style={{ color: '#999', fontSize: '0.85em' }}>-</span>
                           )}
@@ -1612,13 +1781,13 @@ ${index + 1}. ${student.studentName || 'Unknown'}
           {/* Payment History Section */}
           <div className={styles.paymentHistory}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h3>Payment History</h3>
+              <h3>{t('financeApp.pay1.paymentHistory')}</h3>
               <button 
                 className={styles.viewButton}
                 onClick={fetchPaymentHistory}
                 style={{ padding: '8px 16px', fontSize: '0.9em' }}
               >
-                📋 View Details
+                {t('financeApp.pay1.viewDetailsShort')}
               </button>
             </div>
             {studentDetails.invoices
@@ -1627,14 +1796,14 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               .map((invoice, index) => (
                 <div key={index} className={styles.historyItem}>
                   <span className={styles.historyMonth}>{invoice.month}</span>
-                  <span className={styles.historyAmount}>{invoice.paidAmount.toFixed(2)} Birr</span>
+                  <span className={styles.historyAmount}>{invoice.paidAmount.toFixed(2)} {t('financeApp.shell.common.birr')}</span>
                   <span className={styles.historyStatus}>
-                    {invoice.status === 'PAID' ? '✓ Fully Paid' : '⚠ Partially Paid'}
+                    {invoice.status === 'PAID' ? t('financeApp.pay1.fullyPaid') : t('financeApp.pay1.partiallyPaidStatus')}
                   </span>
                 </div>
               ))}
             {studentDetails.invoices.filter(inv => inv.paidAmount > 0).length === 0 && (
-              <p className={styles.noHistory}>No payment history yet</p>
+              <p className={styles.noHistory}>{t('financeApp.pay1.noHistory')}</p>
             )}
           </div>
         </div>
@@ -1644,18 +1813,48 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       {showPaymentModal && selectedInvoice && (
         <div className={styles.modal} onClick={() => setShowPaymentModal(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2>💳 Record Payment</h2>
+            <h2>{t('financeApp.pay2.recordPayment')}</h2>
             <div className={styles.invoiceDetails}>
-              <p><strong>Invoice:</strong> {selectedInvoice.invoiceNumber}</p>
-              <p><strong>Month:</strong> {selectedInvoice.month}</p>
-              <p><strong>Student:</strong> {selectedStudent}</p>
-              <p><strong>Total Amount:</strong> {selectedInvoice.amount.toFixed(2)} Birr</p>
-              <p><strong>Already Paid:</strong> {selectedInvoice.paidAmount.toFixed(2)} Birr</p>
-              <p><strong>Balance Due:</strong> <span className={styles.balanceHighlight}>{selectedInvoice.balance.toFixed(2)} Birr</span></p>
+              <p><strong>{t('financeApp.pay2.invoiceColon')}</strong> {selectedInvoice.invoiceNumber}</p>
+              <p><strong>{t('financeApp.pay2.monthColon')}</strong> {selectedInvoice.month}</p>
+              <p><strong>{t('financeApp.pay2.studentColon')}</strong> {classDetails?.students?.find(s => s.studentId === selectedStudent)?.studentName || t('financeApp.shell.common.unknown')}</p>
+              <p><strong>{t('financeApp.pay2.totalAmountColon')}</strong> {selectedInvoice.netAmount.toFixed(2)} {t('financeApp.shell.common.birr')}</p>
+              <p><strong>{t('financeApp.pay2.alreadyPaidColon')}</strong> {selectedInvoice.paidAmount.toFixed(2)} {t('financeApp.shell.common.birr')}</p>
+              <p><strong>{t('financeApp.pay2.balanceDueColon')}</strong> <span className={styles.balanceHighlight}>{selectedInvoice.balance.toFixed(2)} {t('financeApp.shell.common.birr')}</span></p>
             </div>
             <form onSubmit={handleSubmitPayment}>
+              {selectedInvoice.oldRegistrationFee !== undefined && selectedInvoice.newRegistrationFee !== undefined && (
+                <div className={styles.formGroup}>
+                  <label>{t('financeApp.pay2.registrationFeeType')}</label>
+                  <div className={styles.regFeeToggle}>
+                    <button
+                      type="button"
+                      className={`${styles.toggleBtn} ${regFeeType === 'old' ? styles.toggleActive : ''}`}
+                      onClick={() => {
+                        setRegFeeType('old');
+                        setPaymentForm({...paymentForm, amount: calcRegAdjustedBalance(selectedInvoice, 'old').toFixed(2)});
+                      }}
+                    >
+                      {t('financeApp.pay2.oldPrefix')}{selectedInvoice.oldRegistrationFee} {t('financeApp.shell.common.birr')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.toggleBtn} ${regFeeType === 'new' ? styles.toggleActive : ''}`}
+                      onClick={() => {
+                        setRegFeeType('new');
+                        setPaymentForm({...paymentForm, amount: calcRegAdjustedBalance(selectedInvoice, 'new').toFixed(2)});
+                      }}
+                    >
+                      {t('financeApp.pay2.newPrefix')}{selectedInvoice.newRegistrationFee} {t('financeApp.shell.common.birr')}
+                    </button>
+                  </div>
+                  <small className={styles.fieldHint}>
+                    {regFeeType === 'old' ? t('financeApp.pay2.returningRate') : t('financeApp.pay2.newRate')}
+                  </small>
+                </div>
+              )}
               <div className={styles.formGroup}>
-                <label>Payment Amount * (Fixed)</label>
+                <label>{t('financeApp.pay2.paymentAmount')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1663,12 +1862,16 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   readOnly
                   disabled
                   className={styles.lockedInput}
-                  title="Amount is locked to the exact invoice balance"
+                  title={t('financeApp.pay2.amountLocked')}
                 />
-                <small className={styles.fieldHint}>Amount is fixed at {selectedInvoice.balance.toFixed(2)} Birr (exact invoice balance)</small>
+                <small className={styles.fieldHint}>
+                    {selectedInvoice.oldRegistrationFee !== undefined
+                      ? `${t('financeApp.pay2.amountBasedOn')}${regFeeType === 'old' ? t('financeApp.pay2.oldFee') : t('financeApp.pay2.newFee')}${t('financeApp.pay2.registrationFeeSuffix')}`
+                      : `${t('financeApp.pay2.amountFixed')}${selectedInvoice.balance.toFixed(2)}${t('financeApp.pay2.exactBalance')}`}
+                </small>
               </div>
               <div className={styles.formGroup}>
-                <label>Payment Method *</label>
+                <label>{t('financeApp.pay2.paymentMethod')}</label>
                 <select 
                   value={paymentForm.paymentMethod} 
                   onChange={(e) => setPaymentForm({
@@ -1686,50 +1889,50 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 </select>
               </div>
               <div className={styles.formGroup}>
-                <label>Payment Date *</label>
+                <label>{t('financeApp.pay2.paymentDate')}</label>
                 <input
                   type="date"
                   value={paymentForm.paymentDate}
-                  onChange={(e) => setPaymentForm({...paymentForm, paymentDate: e.target.value})}
-                  required
-                  max={new Date().toISOString().split('T')[0]}
+                  readOnly
+                  disabled
+                  className={styles.lockedInput}
                 />
+                <small className={styles.fieldHint}>{t('financeApp.pay2.autoToday')}</small>
               </div>
               {paymentMethods.find(m => m.value === paymentForm.paymentMethod)?.requiresReference && (
                 <div className={styles.formGroup}>
-                  <label>Reference Number *</label>
+                  <label>{t('financeApp.pay2.referenceNumber')}</label>
                   <input
                     type="text"
                     value={paymentForm.reference}
                     onChange={(e) => setPaymentForm({...paymentForm, reference: e.target.value})}
-                    placeholder="Transaction ID, Receipt #, etc."
-                    required
+                    placeholder={t('financeApp.pay2.optionalTransactionId')}
                   />
-                  <small className={styles.fieldHint}>Required for bank and e-payment methods. Must be unique.</small>
+                  <small className={styles.fieldHint}>{t('financeApp.pay2.optionalForBank')}</small>
                 </div>
               )}
               <div className={styles.formGroup}>
-                <label>Upload Screenshot/Receipt (Optional)</label>
+                <label>{t('financeApp.pay2.uploadReceipt')}</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setPaymentForm({...paymentForm, screenshot: e.target.files[0]})}
                   className={styles.fileInput}
                 />
-                <small className={styles.fieldHint}>Upload a screenshot or photo of the payment receipt (optional)</small>
+                <small className={styles.fieldHint}>{t('financeApp.pay2.uploadReceiptHint')}</small>
               </div>
               <div className={styles.formGroup}>
-                <label>Notes</label>
+                <label>{t('financeApp.pay2.notes')}</label>
                 <textarea
                   value={paymentForm.notes}
                   onChange={(e) => setPaymentForm({...paymentForm, notes: e.target.value})}
-                  placeholder="Additional notes (optional)"
+                  placeholder={t('financeApp.pay2.additionalNotes')}
                   rows="3"
                 />
               </div>
               <div className={styles.modalActions}>
-                <button type="submit" className={styles.submitButton}>✓ Record Payment</button>
-                <button type="button" className={styles.cancelButton} onClick={() => setShowPaymentModal(false)}>Cancel</button>
+                <button type="submit" className={styles.submitButton}>{t('financeApp.pay2.recordPaymentButton')}</button>
+                <button type="button" className={styles.cancelButton} onClick={() => setShowPaymentModal(false)}>{t('financeApp.shell.common.cancel')}</button>
               </div>
             </form>
           </div>
@@ -1740,10 +1943,10 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       {showMultiMonthModal && selectedMonths.length > 0 && (
         <div className={styles.modal} onClick={() => setShowMultiMonthModal(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2>💰 Pay Multiple Months</h2>
+            <h2>{t('financeApp.pay2.payMonths', { count: selectedMonths.length })}</h2>
             <div className={styles.invoiceDetails}>
-              <p><strong>Student:</strong> {selectedStudent}</p>
-              <p><strong>Selected Months:</strong></p>
+              <p><strong>{t('financeApp.pay2.studentColon')}</strong> {classDetails?.students?.find(s => s.studentId === selectedStudent)?.studentName || t('financeApp.shell.common.unknown')}</p>
+              <p><strong>{t('financeApp.pay2.selectedMonths')}</strong></p>
               <div className={styles.monthSelection}>
                 {studentDetails.invoices
                   .filter(inv => inv.balance > 0) // Show all unpaid months
@@ -1761,7 +1964,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                         .filter(inv => inv.balance > 0)
                         .sort((a, b) => a.monthNumber - b.monthNumber)[0];
                       canSelect = invoice.id === firstUnpaid.id;
-                      reason = canSelect ? '' : 'Start with first unpaid month';
+                      reason = canSelect ? '' : t('financeApp.pay2.startFirstUnpaid');
                     } else {
                       // Check if this is the next sequential month after the last selected
                       const sortedSelected = [...selectedMonths].sort((a, b) => a.monthNumber - b.monthNumber);
@@ -1777,7 +1980,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           .sort((a, b) => a.monthNumber - b.monthNumber);
                         
                         canSelect = nextUnpaidMonths.length > 0 && nextUnpaidMonths[0].id === invoice.id;
-                        reason = canSelect ? '' : 'Select months in order';
+                        reason = canSelect ? '' : t('financeApp.pay2.selectInOrder');
                       }
                     }
 
@@ -1800,21 +2003,21 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           {invoice.month}
                           {isLocked && <span className={styles.lockIconSmall}> 🔒</span>}
                         </span>
-                        <span className={styles.monthAmount}>{invoice.balance.toFixed(2)} Birr</span>
+                        <span className={styles.monthAmount}>{invoice.balance.toFixed(2)} {t('financeApp.shell.common.birr')}</span>
                       </div>
                     );
                   })}
               </div>
               <p className={styles.totalAmount}>
-                <strong>Total Amount:</strong> 
+                <strong>{t('financeApp.pay2.totalAmountColon')}</strong> 
                 <span className={styles.balanceHighlight}>
-                  {selectedMonths.reduce((sum, inv) => sum + inv.balance, 0).toFixed(2)} Birr
+                  {selectedMonths.reduce((sum, inv) => sum + inv.balance, 0).toFixed(2)} {t('financeApp.shell.common.birr')}
                 </span>
               </p>
             </div>
             <form onSubmit={handleSubmitMultiMonthPayment}>
               <div className={styles.formGroup}>
-                <label>Payment Method *</label>
+                <label>{t('financeApp.pay2.paymentMethod')}</label>
                 <select 
                   value={paymentForm.paymentMethod} 
                   onChange={(e) => setPaymentForm({
@@ -1832,50 +2035,50 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 </select>
               </div>
               <div className={styles.formGroup}>
-                <label>Payment Date *</label>
+                <label>{t('financeApp.pay2.paymentDateRequired')}</label>
                 <input
                   type="date"
                   value={paymentForm.paymentDate}
                   onChange={(e) => setPaymentForm({...paymentForm, paymentDate: e.target.value})}
                   required
-                  max={new Date().toISOString().split('T')[0]}
+                  max={getLocalDateStr()}
                 />
               </div>
               {paymentMethods.find(m => m.value === paymentForm.paymentMethod)?.requiresReference && (
                 <div className={styles.formGroup}>
-                  <label>Reference Number *</label>
+                  <label>{t('financeApp.pay2.referenceRequired')}</label>
                   <input
                     type="text"
                     value={paymentForm.reference}
                     onChange={(e) => setPaymentForm({...paymentForm, reference: e.target.value})}
-                    placeholder="Transaction ID, Receipt #, etc."
+                    placeholder={t('financeApp.pay2.transactionIdPh')}
                     required
                   />
-                  <small className={styles.fieldHint}>Required for bank and e-payment methods. Must be unique.</small>
+                  <small className={styles.fieldHint}>{t('financeApp.pay2.referenceUniqueHint')}</small>
                 </div>
               )}
               <div className={styles.formGroup}>
-                <label>Upload Screenshot/Receipt (Optional)</label>
+                <label>{t('financeApp.pay2.uploadReceipt')}</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setPaymentForm({...paymentForm, screenshot: e.target.files[0]})}
                   className={styles.fileInput}
                 />
-                <small className={styles.fieldHint}>Upload a screenshot or photo of the payment receipt (optional)</small>
+                <small className={styles.fieldHint}>{t('financeApp.pay2.uploadReceiptHint')}</small>
               </div>
               <div className={styles.formGroup}>
-                <label>Notes</label>
+                <label>{t('financeApp.pay2.notes')}</label>
                 <textarea
                   value={paymentForm.notes}
                   onChange={(e) => setPaymentForm({...paymentForm, notes: e.target.value})}
-                  placeholder="Additional notes (optional)"
+                  placeholder={t('financeApp.pay2.additionalNotes')}
                   rows="3"
                 />
               </div>
               <div className={styles.modalActions}>
-                <button type="submit" className={styles.submitButton}>✓ Pay {selectedMonths.length} Months</button>
-                <button type="button" className={styles.cancelButton} onClick={() => setShowMultiMonthModal(false)}>Cancel</button>
+                <button type="submit" className={styles.submitButton}>{t('financeApp.pay2.payMonths', { count: selectedMonths.length })}</button>
+                <button type="button" className={styles.cancelButton} onClick={() => setShowMultiMonthModal(false)}>{t('financeApp.shell.common.cancel')}</button>
               </div>
             </form>
           </div>
@@ -1886,9 +2089,9 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       {showPaymentHistoryModal && paymentHistory && (
         <div className={styles.modal} onClick={() => setShowPaymentHistoryModal(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', overflow: 'auto' }}>
-            <h2>💳 Payment Transaction History</h2>
-            <p><strong>Student:</strong> {selectedStudent}</p>
-            <p><strong>Total Payments:</strong> {paymentHistory.totalPayments}</p>
+            <h2>{t('financeApp.pay2.transactionHistory')}</h2>
+            <p><strong>{t('financeApp.pay2.studentColon')}</strong> {classDetails?.students?.find(s => s.studentId === selectedStudent)?.studentName || t('financeApp.shell.common.unknown')}</p>
+            <p><strong>{t('financeApp.pay2.totalPaymentsColon')}</strong> {paymentHistory.totalPayments}</p>
             
             <div style={{ marginTop: '20px' }}>
               {paymentHistory.payments.map((payment, index) => (
@@ -1907,7 +2110,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                     borderBottom: '2px solid #007bff'
                   }}>
                     <div>
-                      <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '3px' }}>Payment Date & Time</div>
+                      <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '3px' }}>{t('financeApp.pay2.paymentDateTime')}</div>
                       <div style={{ fontSize: '1.1em', fontWeight: 'bold' }}>
                         📅 {new Date(payment.paymentDate).toLocaleDateString('en-US', { 
                           year: 'numeric', 
@@ -1924,39 +2127,39 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '3px' }}>Amount Paid</div>
+                      <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '3px' }}>{t('financeApp.pay2.amountPaid')}</div>
                       <div style={{ color: '#28a745', fontSize: '1.3em', fontWeight: 'bold' }}>
-                        {payment.amount.toFixed(2)} Birr
+                        {payment.amount.toFixed(2)} {t('financeApp.shell.common.birr')}
                       </div>
                     </div>
                   </div>
                   
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>Payment Method:</strong> {payment.paymentMethod}
+                    <strong>{t('financeApp.pay2.paymentMethodColon')}</strong> {payment.paymentMethod}
                     {payment.reference && (
                       <span style={{ marginLeft: '10px' }}>
-                        <strong>Reference:</strong> {payment.reference}
+                        <strong>{t('financeApp.pay2.referenceColon')}</strong> {payment.reference}
                       </span>
                     )}
                   </div>
 
                   {payment.notes && (
                     <div style={{ marginBottom: '10px' }}>
-                      <strong>Notes:</strong> {payment.notes}
+                      <strong>{t('financeApp.pay2.notesColon')}</strong> {payment.notes}
                     </div>
                   )}
 
                   {payment.screenshot && (
                     <div style={{ marginBottom: '10px' }}>
-                      <strong>Screenshot:</strong>{' '}
-                      <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://v2.skoolific.com'}${payment.screenshot}`} target="_blank" rel="noopener noreferrer">
-                        View Receipt
+                      <strong>{t('financeApp.pay2.screenshotColon')}</strong>{' '}
+                      <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${payment.screenshot}`} target="_blank" rel="noopener noreferrer">
+                        {t('financeApp.pay2.viewReceipt')}
                       </a>
                     </div>
                   )}
 
                   <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd' }}>
-                    <strong>Months Paid:</strong>
+                    <strong>{t('financeApp.pay2.monthsPaidColon')}</strong>
                     <div style={{ marginTop: '5px' }}>
                       {payment.invoices.map((inv, idx) => (
                         <div key={idx} style={{ 
@@ -1968,7 +2171,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           borderRadius: '4px'
                         }}>
                           <span>{inv.month} ({inv.invoiceNumber})</span>
-                          <span>{inv.amountAllocated.toFixed(2)} Birr</span>
+                          <span>{inv.amountAllocated.toFixed(2)} {t('financeApp.shell.common.birr')}</span>
                         </div>
                       ))}
                     </div>
@@ -1983,7 +2186,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 className={styles.cancelButton} 
                 onClick={() => setShowPaymentHistoryModal(false)}
               >
-                Close
+                {t('financeApp.shell.common.close')}
               </button>
             </div>
           </div>
@@ -1995,7 +2198,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       {showReportsModal && overview && (
         <div className={styles.modal} onClick={() => setShowReportsModal(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1200px', maxHeight: '90vh', overflow: 'auto' }}>
-            <h2>📊 Financial Reports</h2>
+            <h2>{t('financeApp.pay2.financialReports')}</h2>
             
             {/* Current Month Indicator */}
             <div style={{
@@ -2009,9 +2212,9 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               alignItems: 'center'
             }}>
               <div>
-                <strong style={{ fontSize: '1.1em' }}>Current Ethiopian Month: {ethiopianMonths[currentEthiopianMonth - 1]}</strong>
+                <strong style={{ fontSize: '1.1em' }}>{t('financeApp.pay2.currentEthMonth')}{ethiopianMonths[currentEthiopianMonth - 1]}</strong>
                 <p style={{ margin: '5px 0 0 0', fontSize: '0.9em', opacity: 0.9 }}>
-                  Showing unlocked months 1-{currentEthiopianMonth} ({ethiopianMonths.slice(0, currentEthiopianMonth).join(', ')})
+                  {t('financeApp.pay2.showingUnlocked', { count: currentEthiopianMonth, names: ethiopianMonths.slice(0, currentEthiopianMonth).join(', ') })}
                 </p>
               </div>
               <div style={{ fontSize: '2.5em' }}>📅</div>
@@ -2022,17 +2225,17 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               <div className={styles.reportCards} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                 <div className={styles.reportCard} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
                   <div style={{ fontSize: '3em', marginBottom: '10px' }}>👥</div>
-                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>Total Students</h3>
+                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>{t('financeApp.pay2.totalStudents')}</h3>
                   <p style={{ color: 'white', fontSize: '2.5em', fontWeight: 'bold', margin: '10px 0' }}>
                     {overview.summary.totalStudents}
                   </p>
                   <div style={{ display: 'flex', gap: '20px', marginTop: '10px', fontSize: '0.9em' }}>
                     <div>
-                      <span style={{ opacity: 0.8 }}>Paying:</span>
+                      <span style={{ opacity: 0.8 }}>{t('financeApp.pay2.payingColon')}</span>
                       <strong style={{ marginLeft: '5px' }}>{overview.summary.payingStudents || 0}</strong>
                     </div>
                     <div>
-                      <span style={{ opacity: 0.8 }}>Exempt:</span>
+                      <span style={{ opacity: 0.8 }}>{t('financeApp.pay2.exemptColon')}</span>
                       <strong style={{ marginLeft: '5px' }}>{overview.summary.freeStudents || 0}</strong>
                     </div>
                   </div>
@@ -2040,70 +2243,70 @@ ${index + 1}. ${student.studentName || 'Unknown'}
 
                 <div className={styles.reportCard} style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
                   <div style={{ fontSize: '3em', marginBottom: '10px' }}>💰</div>
-                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>Total Expected (Unlocked)</h3>
+                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>{t('financeApp.pay2.totalExpected')}</h3>
                   <p style={{ color: 'white', fontSize: '2.5em', fontWeight: 'bold', margin: '10px 0' }}>
                     {overview.summary.unlockedTotalAmount?.toFixed(2) || '0.00'}
                   </p>
                   <p style={{ fontSize: '0.9em', opacity: 0.8 }}>
-                    Birr (Months 1-{currentEthiopianMonth}, Paying Students Only)
+                    {t('financeApp.pay2.birrMonthsPaying', { count: currentEthiopianMonth })}
                   </p>
                 </div>
 
                 <div className={styles.reportCard} style={{ background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', color: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
                   <div style={{ fontSize: '3em', marginBottom: '10px' }}>✓</div>
-                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>Total Paid</h3>
+                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>{t('financeApp.pay2.totalPaidCard')}</h3>
                   <p style={{ color: 'white', fontSize: '2.5em', fontWeight: 'bold', margin: '10px 0' }}>
                     {overview.summary.unlockedTotalPaid?.toFixed(2) || '0.00'}
                   </p>
-                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>Birr</p>
+                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>{t('financeApp.shell.common.birr')}</p>
                 </div>
 
                 <div className={styles.reportCard} style={{ background: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)', color: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
                   <div style={{ fontSize: '3em', marginBottom: '10px' }}>⏳</div>
-                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>Total Pending</h3>
+                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>{t('financeApp.pay2.totalPendingCard')}</h3>
                   <p style={{ color: 'white', fontSize: '2.5em', fontWeight: 'bold', margin: '10px 0' }}>
                     {overview.summary.unlockedTotalPending?.toFixed(2) || '0.00'}
                   </p>
-                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>Birr</p>
+                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>{t('financeApp.shell.common.birr')}</p>
                 </div>
 
                 <div className={styles.reportCard} style={{ background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', color: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
                   <div style={{ fontSize: '3em', marginBottom: '10px' }}>📈</div>
-                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>Collection Rate</h3>
+                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>{t('financeApp.pay2.collectionRate')}</h3>
                   <p style={{ color: 'white', fontSize: '2.5em', fontWeight: 'bold', margin: '10px 0' }}>
                     {overview.summary.unlockedTotalAmount > 0 
                       ? ((overview.summary.unlockedTotalPaid / overview.summary.unlockedTotalAmount) * 100).toFixed(1)
                       : '0.0'}%
                   </p>
-                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>Payment Collection Rate</p>
+                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>{t('financeApp.pay2.paymentCollectionRate')}</p>
                 </div>
 
                 <div className={styles.reportCard} style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
                   <div style={{ fontSize: '3em', marginBottom: '10px' }}>⚠️</div>
-                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>Unpaid Students</h3>
+                  <h3 style={{ color: 'white', margin: '0 0 5px 0' }}>{t('financeApp.pay2.unpaidStudentsCard')}</h3>
                   <p style={{ color: 'white', fontSize: '2.5em', fontWeight: 'bold', margin: '10px 0' }}>
                     {overview.summary.totalUnpaid + overview.summary.totalPartial}
                   </p>
-                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>Students with pending payments</p>
+                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>{t('financeApp.pay2.studentsWithPending')}</p>
                 </div>
               </div>
             </div>
 
             {/* Class Breakdown Table */}
             <div style={{ marginTop: '40px' }}>
-              <h3 style={{ marginBottom: '20px', fontSize: '1.5em' }}>Class-wise Breakdown</h3>
+              <h3 style={{ marginBottom: '20px', fontSize: '1.5em' }}>{t('financeApp.pay2.classBreakdown')}</h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
                   <thead>
                     <tr style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-                      <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Class</th>
-                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Total Students</th>
-                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Paying</th>
-                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Exempt</th>
-                      <th style={{ padding: '15px', textAlign: 'right', fontWeight: '600' }}>Total Amount</th>
-                      <th style={{ padding: '15px', textAlign: 'right', fontWeight: '600' }}>Total Paid</th>
-                      <th style={{ padding: '15px', textAlign: 'right', fontWeight: '600' }}>Total Pending</th>
-                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Rate</th>
+                      <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>{t('financeApp.pay2.thClass')}</th>
+                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>{t('financeApp.pay2.thTotalStudents')}</th>
+                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>{t('financeApp.pay2.thPaying')}</th>
+                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>{t('financeApp.pay2.thExempt')}</th>
+                      <th style={{ padding: '15px', textAlign: 'right', fontWeight: '600' }}>{t('financeApp.pay2.thTotalAmount')}</th>
+                      <th style={{ padding: '15px', textAlign: 'right', fontWeight: '600' }}>{t('financeApp.pay2.thTotalPaid')}</th>
+                      <th style={{ padding: '15px', textAlign: 'right', fontWeight: '600' }}>{t('financeApp.pay2.thTotalPending')}</th>
+                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>{t('financeApp.pay2.thRate')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2128,13 +2331,13 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           </span>
                         </td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                          {classData.unlockedTotalAmount?.toFixed(2) || '0.00'} Birr
+                          {classData.unlockedTotalAmount?.toFixed(2) || '0.00'} {t('financeApp.shell.common.birr')}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'right', color: '#28a745', fontWeight: 'bold' }}>
-                          {classData.unlockedTotalPaid?.toFixed(2) || '0.00'} Birr
+                          {classData.unlockedTotalPaid?.toFixed(2) || '0.00'} {t('financeApp.shell.common.birr')}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'right', color: '#dc3545', fontWeight: 'bold' }}>
-                          {classData.unlockedTotalPending?.toFixed(2) || '0.00'} Birr
+                          {classData.unlockedTotalPending?.toFixed(2) || '0.00'} {t('financeApp.shell.common.birr')}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'center' }}>
                           <span style={{
@@ -2159,13 +2362,13 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontWeight: 'bold' }}>
-                      <td style={{ padding: '15px' }}>TOTAL</td>
+                      <td style={{ padding: '15px' }}>{t('financeApp.pay2.totalLabel')}</td>
                       <td style={{ padding: '15px', textAlign: 'center' }}>{overview.summary.totalStudents}</td>
                       <td style={{ padding: '15px', textAlign: 'center' }}>{overview.summary.payingStudents || 0}</td>
                       <td style={{ padding: '15px', textAlign: 'center' }}>{overview.summary.freeStudents || 0}</td>
-                      <td style={{ padding: '15px', textAlign: 'right' }}>{overview.summary.unlockedTotalAmount?.toFixed(2) || '0.00'} Birr</td>
-                      <td style={{ padding: '15px', textAlign: 'right' }}>{overview.summary.unlockedTotalPaid?.toFixed(2) || '0.00'} Birr</td>
-                      <td style={{ padding: '15px', textAlign: 'right' }}>{overview.summary.unlockedTotalPending?.toFixed(2) || '0.00'} Birr</td>
+                      <td style={{ padding: '15px', textAlign: 'right' }}>{overview.summary.unlockedTotalAmount?.toFixed(2) || '0.00'} {t('financeApp.shell.common.birr')}</td>
+                      <td style={{ padding: '15px', textAlign: 'right' }}>{overview.summary.unlockedTotalPaid?.toFixed(2) || '0.00'} {t('financeApp.shell.common.birr')}</td>
+                      <td style={{ padding: '15px', textAlign: 'right' }}>{overview.summary.unlockedTotalPending?.toFixed(2) || '0.00'} {t('financeApp.shell.common.birr')}</td>
                       <td style={{ padding: '15px', textAlign: 'center' }}>
                         {overview.summary.unlockedTotalAmount > 0 
                           ? ((overview.summary.unlockedTotalPaid / overview.summary.unlockedTotalAmount) * 100).toFixed(1)
@@ -2181,7 +2384,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
               <button 
                 type="button" 
                 className={styles.cancelButton} 
-                onClick={() => setShowReportsModal(false)}
+                click={() => setShowReportsModal(false)}
                 style={{
                   padding: '12px 30px',
                   fontSize: '1em',
@@ -2193,7 +2396,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   fontWeight: '600'
                 }}
               >
-                Close
+                {t('financeApp.shell.common.close')}
               </button>
             </div>
           </div>
@@ -2204,22 +2407,22 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       {showReportsModal && multipleMonthlyReport && (
         <div className={styles.modal} onClick={() => setShowReportsModal(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '85vh', overflow: 'auto' }}>
-            <h2>📊 Multiple Monthly Payments Report</h2>
+            <h2>{t('financeApp.pay2.multipleMonthsReport')}</h2>
             
             <div style={{ marginTop: '20px', border: '1px solid #ddd', borderRadius: '8px', padding: '20px', backgroundColor: '#f9f9f9' }}>
-              <p><strong>Report Date:</strong> {new Date(multipleMonthlyReport.reportDate).toLocaleDateString()}</p>
-              <p><strong>Total Payments:</strong> {multipleMonthlyReport.totalPayments}</p>
-              <p><strong>Total Amount:</strong> <span style={{ color: '#28a745', fontSize: '1.2em', fontWeight: 'bold' }}>{multipleMonthlyReport.totalAmount.toFixed(2)} Birr</span></p>
+              <p><strong>{t('financeApp.pay2.reportDateColon')}</strong> {new Date(multipleMonthlyReport.reportDate).toLocaleDateString()}</p>
+              <p><strong>{t('financeApp.pay2.totalPaymentsColon')}</strong> {multipleMonthlyReport.totalPayments}</p>
+              <p><strong>{t('financeApp.pay2.totalAmountBreakdown')}:</strong> <span style={{ color: '#28a745', fontSize: '1.2em', fontWeight: 'bold' }}>{multipleMonthlyReport.totalAmount.toFixed(2)} {t('financeApp.shell.common.birr')}</span></p>
 
               <div style={{ marginTop: '20px', overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#007bff', color: 'white' }}>
-                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'left' }}>Student ID</th>
-                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'left' }}>Payment Date</th>
-                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th>
-                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'center' }}>Months</th>
-                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'left' }}>Months Paid</th>
+                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'left' }}>{t('financeApp.pay1.thStudentId')}</th>
+                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'left' }}>{t('financeApp.pay2.thPaymentDate')}</th>
+                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right' }}>{t('financeApp.pay1.thAmount')}</th>
+                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'center' }}>{t('financeApp.pay2.thMonths')}</th>
+                      <th style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'left' }}>{t('financeApp.pay2.monthsPaid')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2230,7 +2433,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                           {new Date(payment.paymentDate).toLocaleDateString()}
                         </td>
                         <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right', fontWeight: 'bold', color: '#28a745' }}>
-                          {payment.amount.toFixed(2)} Birr
+                          {payment.amount.toFixed(2)} {t('financeApp.shell.common.birr')}
                         </td>
                         <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>
                           <span style={{ 
@@ -2263,7 +2466,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   setMultipleMonthlyReport(null);
                 }}
               >
-                Close
+                {t('financeApp.shell.common.close')}
               </button>
             </div>
           </div>
@@ -2279,51 +2482,51 @@ ${index + 1}. ${student.studentName || 'Unknown'}
             <div style={{ marginTop: '20px', border: '1px solid #e0e0e0', borderRadius: '12px', padding: '25px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div>
-                  <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>Total Students</p>
+                  <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>{t('financeApp.pay2.totalStudents')}</p>
                   <p style={{ fontSize: '2em', fontWeight: 'bold', margin: 0 }}>{cardDetailsData.students.length}</p>
                 </div>
                 
                 {selectedCardType === 'TOTAL_AMOUNT' && (
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>Total Amount</p>
+                    <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>{t('financeApp.pay2.totalAmountBreakdown')}</p>
                     <p style={{ fontSize: '1.8em', fontWeight: 'bold', margin: 0 }}>
-                      {cardDetailsData.students.reduce((sum, s) => sum + s.totalAmount, 0).toFixed(2)} Birr
+                      {cardDetailsData.students.reduce((sum, s) => sum + s.totalAmount, 0).toFixed(2)} {t('financeApp.shell.common.birr')}
                     </p>
                   </div>
                 )}
                 
                 {selectedCardType === 'TOTAL_PAID' && (
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>Total Paid</p>
+                    <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>{t('financeApp.pay2.totalPaidBreakdown')}</p>
                     <p style={{ fontSize: '1.8em', fontWeight: 'bold', margin: 0 }}>
-                      {cardDetailsData.students.reduce((sum, s) => sum + s.totalPaid, 0).toFixed(2)} Birr
+                      {cardDetailsData.students.reduce((sum, s) => sum + s.totalPaid, 0).toFixed(2)} {t('financeApp.shell.common.birr')}
                     </p>
                   </div>
                 )}
                 
                 {selectedCardType === 'TOTAL_PENDING' && (
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>Total Pending</p>
+                    <p style={{ fontSize: '0.9em', opacity: 0.9, marginBottom: '5px' }}>{t('financeApp.pay2.totalPendingBreakdown')}</p>
                     <p style={{ fontSize: '1.8em', fontWeight: 'bold', margin: 0 }}>
-                      {cardDetailsData.students.reduce((sum, s) => sum + s.balance, 0).toFixed(2)} Birr
+                      {cardDetailsData.students.reduce((sum, s) => sum + s.balance, 0).toFixed(2)} {t('financeApp.shell.common.birr')}
                     </p>
                   </div>
                 )}
               </div>
 
-              <div style={{ marginTop: '25px', background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+              <div style={{ marginTop: '25px', background: 'var(--color-surface)', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'left', fontWeight: '600' }}>Student ID</th>
-                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'left', fontWeight: '600' }}>Student Name</th>
-                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'right', fontWeight: '600' }}>Total Amount</th>
-                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'right', fontWeight: '600' }}>Total Paid</th>
-                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'right', fontWeight: '600' }}>Balance</th>
+                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'left', fontWeight: '600' }}>{t('financeApp.pay1.thStudentId')}</th>
+                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'left', fontWeight: '600' }}>{t('financeApp.pay1.thStudentName')}</th>
+                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'right', fontWeight: '600' }}>{t('financeApp.pay2.totalAmountBreakdown')}</th>
+                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'right', fontWeight: '600' }}>{t('financeApp.pay2.totalPaidBreakdown')}</th>
+                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'right', fontWeight: '600' }}>{t('financeApp.pay1.thBalance')}</th>
                       {(selectedCardType === 'UNPAID_STUDENTS' || selectedCardType === 'TOTAL_PENDING') && (
-                        <th style={{ padding: '15px 12px', border: 'none', textAlign: 'center', fontWeight: '600' }}>Unpaid Months</th>
+                        <th style={{ padding: '15px 12px', border: 'none', textAlign: 'center', fontWeight: '600' }}>{t('financeApp.pay1.thUnpaidMonths')}</th>
                       )}
-                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'center', fontWeight: '600' }}>Status</th>
+                      <th style={{ padding: '15px 12px', border: 'none', textAlign: 'center', fontWeight: '600' }}>{t('financeApp.pay1.thStatus')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2336,15 +2539,15 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#f8f9fa' : 'white'}
                       >
                         <td style={{ padding: '12px', border: 'none', color: '#333', fontSize: '0.9em' }}>{student.studentId}</td>
-                        <td style={{ padding: '12px', border: 'none', fontWeight: '600', color: '#1a1a1a' }}>{student.studentName || 'Unknown'}</td>
+                        <td style={{ padding: '12px', border: 'none', fontWeight: '600', color: '#1a1a1a' }}>{student.studentName || t('financeApp.shell.common.unknown')}</td>
                         <td style={{ padding: '12px', border: 'none', textAlign: 'right', color: '#333' }}>
-                          {student.totalAmount.toFixed(2)} Birr
+                          {student.totalAmount.toFixed(2)} {t('financeApp.shell.common.birr')}
                         </td>
                         <td style={{ padding: '12px', border: 'none', textAlign: 'right', color: '#28a745', fontWeight: 'bold' }}>
-                          {student.totalPaid.toFixed(2)} Birr
+                          {student.totalPaid.toFixed(2)} {t('financeApp.shell.common.birr')}
                         </td>
                         <td style={{ padding: '12px', border: 'none', textAlign: 'right', color: student.balance > 0 ? '#dc3545' : '#28a745', fontWeight: 'bold' }}>
-                          {student.balance.toFixed(2)} Birr
+                          {student.balance.toFixed(2)} {t('financeApp.shell.common.birr')}
                         </td>
                         {(selectedCardType === 'UNPAID_STUDENTS' || selectedCardType === 'TOTAL_PENDING') && (
                           <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>
@@ -2371,7 +2574,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                             color: 'white',
                             display: 'inline-block'
                           }}>
-                            {student.status === 'PAID' ? '✓ Paid' : student.status === 'PARTIAL' ? '⚠ Partial' : '○ Unpaid'}
+                            {student.status === 'PAID' ? t('financeApp.pay3.statusPaidShort') : student.status === 'PARTIAL' ? t('financeApp.pay3.statusPartialShort') : t('financeApp.pay3.statusUnpaidShort')}
                           </span>
                         </td>
                       </tr>
@@ -2410,7 +2613,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                Close
+                {t('financeApp.shell.common.close')}
               </button>
             </div>
           </div>
@@ -2425,7 +2628,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
         width: '300px',
         maxHeight: '220px',
         overflow: 'auto',
-        background: 'white',
+        background: 'var(--color-surface)',
         border: '3px solid red',
         zIndex: 9999,
         transform: 'scale(0.5)',
@@ -2442,8 +2645,8 @@ ${index + 1}. ${student.studentName || 'Unknown'}
         </div>
         {receiptData && (
           <div style={{ padding: '10px', background: '#ffeb3b', borderTop: '2px solid red', fontSize: '12px' }}>
-            <strong>DEBUG MODE:</strong> Receipt is visible for testing. 
-            <br/>Receipt #{receiptData.receiptNumber} ready to print.
+            <strong>{t('financeApp.pay2.debugMode')}</strong> {t('financeApp.pay2.receiptVisible')} 
+            <br/>{t('financeApp.pay2.receiptNum')}{receiptData.receiptNumber}{t('financeApp.pay2.readyToPrint')}
           </div>
         )}
       </div>
@@ -2452,27 +2655,27 @@ ${index + 1}. ${student.studentName || 'Unknown'}
       {showExemptionModal && selectedStudent && (
         <div className={styles.modal} onClick={() => setShowExemptionModal(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <h2>🎓 Manage Student Exemption</h2>
+            <h2>{t('financeApp.pay2.manageExemption')}</h2>
             
-            <div style={{ marginTop: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '20px' }}>
-              <p><strong>Student ID:</strong> {selectedStudent}</p>
+            <div style={{ marginTop: '20px', padding: '15px', background: 'var(--bg-tertiary)', borderRadius: '8px', marginBottom: '20px' }}>
+              <p><strong>{t('financeApp.pay2.studentIdColon')}</strong> {selectedStudent}</p>
               {classDetails && classDetails.students && (
-                <p><strong>Student Name:</strong> {classDetails.students.find(s => s.studentId === selectedStudent)?.studentName || 'Unknown'}</p>
+                <p><strong>{t('financeApp.pay2.studentNameColon')}</strong> {classDetails.students.find(s => s.studentId === selectedStudent)?.studentName || t('financeApp.shell.common.unknown')}</p>
               )}
-              <p><strong>Class:</strong> {selectedClass}</p>
+              <p><strong>{t('financeApp.pay2.classColon')}</strong> {selectedClass}</p>
             </div>
 
             <form onSubmit={async (e) => {
               e.preventDefault();
               
               if (!selectedClass || !selectedStudent) {
-                alert('Missing class or student information');
+                alert(t('financeApp.pay3.missingStudentInfo'));
                 return;
               }
 
               // Validate: if marking as free, exemption type is required
               if (exemptionForm.is_free && !exemptionForm.exemption_type) {
-                alert('Please select an exemption type');
+                alert(t('financeApp.pay3.selectExemption'));
                 return;
               }
 
@@ -2488,8 +2691,8 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                   );
                   
                   alert(exemptionForm.is_free 
-                    ? `Student marked as learning for free (${exemptionForm.exemption_type})` 
-                    : 'Exemption removed successfully'
+                    ? t('financeApp.pay3.markedFree', { type: exemptionForm.exemption_type })
+                    : t('financeApp.pay3.exemptionRemoved')
                   );
                   
                   setShowExemptionModal(false);
@@ -2502,7 +2705,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 }
               } catch (error) {
                 console.error('Error updating exemption:', error);
-                alert('Failed to update exemption: ' + (error.response?.data?.error || error.message));
+                alert(t('financeApp.pay3.failedUpdateExemption') + (error.response?.data?.error || error.message));
               }
             }}>
               <div style={{ marginBottom: '20px' }}>
@@ -2518,7 +2721,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                     })}
                     style={{ marginRight: '10px', width: '20px', height: '20px' }}
                   />
-                  Student is learning for free
+                  {t('financeApp.pay2.learningFreeCheck')}
                 </label>
               </div>
 
@@ -2526,7 +2729,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                 <>
                   <div style={{ marginBottom: '20px' }}>
                     <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                      Exemption Type <span style={{ color: 'red' }}>*</span>
+                      {t('financeApp.pay2.exemptionType')} <span style={{ color: 'red' }}>*</span>
                     </label>
                     <select
                       value={exemptionForm.exemption_type}
@@ -2540,23 +2743,23 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                         fontSize: '1em'
                       }}
                     >
-                      <option value="">Select exemption type...</option>
-                      <option value="Scholarship">Scholarship</option>
-                      <option value="Orphan">Orphan</option>
-                      <option value="Staff Child">Staff Child</option>
-                      <option value="Financial Hardship">Financial Hardship</option>
-                      <option value="Other">Other</option>
+                      <option value="">{t('financeApp.pay2.selectExemptionType')}</option>
+                      <option value="Scholarship">{t('financeApp.pay2.scholarship')}</option>
+                      <option value="Orphan">{t('financeApp.pay2.orphan')}</option>
+                      <option value="Staff Child">{t('financeApp.pay2.staffChild')}</option>
+                      <option value="Financial Hardship">{t('financeApp.pay2.financialHardship')}</option>
+                      <option value="Other">{t('financeApp.pay2.other')}</option>
                     </select>
                   </div>
 
                   <div style={{ marginBottom: '20px' }}>
                     <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                      Reason / Details
+                      {t('financeApp.pay2.reasonDetails')}
                     </label>
                     <textarea
                       value={exemptionForm.exemption_reason}
                       onChange={(e) => setExemptionForm({ ...exemptionForm, exemption_reason: e.target.value })}
-                      placeholder="Enter reason or additional details..."
+                      placeholder={t('financeApp.pay2.reasonPh')}
                       rows={4}
                       style={{
                         width: '100%',
@@ -2567,6 +2770,29 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                         resize: 'vertical'
                       }}
                     />
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                      {t('financeApp.pay2.registrationFeeType') || 'Registration Fee Type'} <span style={{ color: 'red' }}>*</span>
+                    </label>
+                    <select
+                      value={exemptionForm.registration_fee_type}
+                      onChange={(e) => setExemptionForm({ ...exemptionForm, registration_fee_type: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '1px solid #ddd',
+                        borderRadius: '8px',
+                        fontSize: '1em'
+                      }}
+                    >
+                      <option value="new">New Registration Fee</option>
+                      <option value="old">Old Registration Fee</option>
+                    </select>
+                    <p style={{ marginTop: '8px', fontSize: '0.85em', color: 'var(--text-secondary)' }}>
+                      💡 Free students still pay the one-time Registration Fee only (no monthly tuition).
+                    </p>
                   </div>
                 </>
               )}
@@ -2587,7 +2813,7 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                     marginRight: '10px'
                   }}
                 >
-                  Save Changes
+                  {t('financeApp.pay2.saveChanges')}
                 </button>
                 <button 
                   type="button" 
@@ -2597,17 +2823,204 @@ ${index + 1}. ${student.studentName || 'Unknown'}
                     padding: '12px 30px',
                     fontSize: '1em',
                     borderRadius: '8px',
-                    border: '1px solid #ddd',
-                    background: 'white',
-                    color: '#333',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--card-bg)',
+                    color: 'var(--text-color)',
                     cursor: 'pointer',
                     fontWeight: '600'
                   }}
                 >
-                  Cancel
+                  {t('financeApp.shell.common.cancel')}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Check Invoice Modal - look up invoice by 10-digit reference code (cross-branch) */}
+      {showInvoiceLookupModal && (
+        <div className={styles.modal}>
+          <div className={styles.modalContent} style={{ maxWidth: '760px' }}>
+            <h2 style={{ marginTop: 0 }}>{t('financeApp.pay3.checkInvoice')}</h2>
+            <form onSubmit={handleInvoiceLookup}>
+              <div className={styles.formGroup}>
+                <label>{t('financeApp.pay3.invoiceCodeLabel')}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={invoiceLookupCode}
+                  onChange={(e) => {
+                    setInvoiceLookupCode(e.target.value.replace(/\D/g, ''));
+                    setInvoiceLookupError('');
+                    setInvoiceLookupResult(null);
+                  }}
+                  placeholder={t('financeApp.pay3.invoiceCodePlaceholder')}
+                  style={{
+                    padding: '12px 14px',
+                    fontSize: '1.1em',
+                    letterSpacing: '2px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--card-bg)',
+                    color: 'var(--text-color)',
+                    width: '100%'
+                  }}
+                  required
+                />
+              </div>
+
+              {invoiceLookupError && (
+                <div style={{
+                  padding: '14px 18px',
+                  borderRadius: '8px',
+                  background: '#fdecea',
+                  color: '#c0392b',
+                  border: '1px solid #f5b7b1',
+                  marginBottom: '16px',
+                  fontWeight: '600'
+                }}>
+                  {invoiceLookupError}
+                </div>
+              )}
+
+              <div className={styles.modalActions}>
+                <button type="submit" className={styles.submitButton} disabled={invoiceLookupLoading}>
+                  {invoiceLookupLoading 
+                    ? t('financeApp.pay3.searching') 
+                    : t('financeApp.pay3.searchInvoice')}
+                </button>
+                <button type="button" className={styles.cancelButton} onClick={closeInvoiceLookup}>
+                  {t('financeApp.shell.common.cancel')}
+                </button>
+              </div>
+            </form>
+
+            {invoiceLookupResult && (
+              <div style={{ marginTop: '24px' }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '16px 20px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)',
+                  color: 'white',
+                  marginBottom: '16px'
+                }}>
+                  <div>
+                    <strong style={{ fontSize: '1.15em' }}>{invoiceLookupResult.student.name}</strong>
+                    <div style={{ fontSize: '0.9em', opacity: 0.92, marginTop: '4px' }}>
+                      {invoiceLookupResult.branchCode} · {invoiceLookupResult.student.className || '—'}{invoiceLookupResult.student.isFree ? ' · 🎓 FREE' : ''}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.8em', opacity: 0.92 }}>Invoice ID</div>
+                    <strong style={{ fontSize: '1.3em', letterSpacing: '2px' }}>{invoiceLookupResult.invoice.invoiceRefCode}</strong>
+                  </div>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.95em' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.studentName')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{invoiceLookupResult.student.name}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.studentId')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{invoiceLookupResult.student.studentId}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.branch')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{invoiceLookupResult.branchCode}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.month')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{invoiceLookupResult.invoice.month}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.amount')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{Number(invoiceLookupResult.invoice.netAmount).toFixed(2)} {t('financeApp.shell.common.birr')}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.paid')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{Number(invoiceLookupResult.invoice.paidAmount).toFixed(2)} {t('financeApp.shell.common.birr')}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.balance')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{Number(invoiceLookupResult.invoice.balance).toFixed(2)} {t('financeApp.shell.common.birr')}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.paymentDate')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>{formatLookupDate(invoiceLookupResult.invoice.paidDate)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: '700' }}>{t('financeApp.pay3.status')}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>
+                        <span className={`${styles.statusBadge} ${getStatusColor(invoiceLookupResult.invoice.status)}`}>
+                          {getStatusText(invoiceLookupResult.invoice.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {invoiceLookupResult.payments && invoiceLookupResult.payments.length > 0 && (
+                  <div style={{ marginTop: '16px' }}>
+                    <h3 style={{ margin: '0 0 10px 0' }}>{t('financeApp.pay3.paymentHistory')}</h3>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92em' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)' }}>#</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)' }}>{t('financeApp.pay3.receipt')}</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)' }}>{t('financeApp.pay3.paymentDate')}</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right', borderBottom: '2px solid var(--border-color)' }}>{t('financeApp.pay3.amount')}</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)' }}>{t('financeApp.pay3.paymentMethod')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoiceLookupResult.payments.map((p, idx) => (
+                          <tr key={idx}>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>{idx + 1}</td>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>{p.receiptNumber || '—'}</td>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>{formatLookupDate(p.paymentDate)}</td>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', textAlign: 'right' }}>{Number(p.amount).toFixed(2)}</td>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>
+                              <span className={styles.methodBadge}>
+                                {(p.paymentMethod || '').replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {invoiceLookupResult.invoice.items && invoiceLookupResult.invoice.items.length > 0 && (
+                  <div style={{ marginTop: '16px' }}>
+                    <h3 style={{ margin: '0 0 10px 0' }}>{t('financeApp.pay3.invoiceItems')}</h3>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92em' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)' }}>{t('financeApp.pay3.description')}</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right', borderBottom: '2px solid var(--border-color)' }}>{t('financeApp.pay3.amount')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoiceLookupResult.invoice.items.map((item, idx) => (
+                          <tr key={idx}>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>{item.description || item.feeCategory || '—'}</td>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', textAlign: 'right' }}>{Number(item.amount).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

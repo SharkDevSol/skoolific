@@ -59,11 +59,11 @@ const DirectorCommunication = () => {
     const fetchData = async () => {
       try {
         // Fetch all contacts (guardians) for admin
-        const contactsRes = await axios.get('https://v2.skoolific.com/api/chats/contacts/admin');
+        const contactsRes = await axios.get('/api/chats/contacts/admin');
         dispatch(setContacts({ role: 'director', contacts: contactsRes.data }));
 
         // Fetch all requests for this director
-        const requestsRes = await axios.get(`https://v2.skoolific.com/api/chats/user/${directorId}`);
+        const requestsRes = await axios.get(`/api/chats/user/${directorId}`);
         requestsRes.data.forEach(request => {
           const otherUserId = request.sender_id === directorId ? request.recipient_id : request.sender_id;
           dispatch(addRequest({ userId: otherUserId, request }));
@@ -72,7 +72,7 @@ const DirectorCommunication = () => {
         console.error('Error:', err);
         // Fallback to general contacts endpoint
         try {
-          const contactsRes = await axios.get('https://v2.skoolific.com/api/chats/contacts');
+          const contactsRes = await axios.get('/api/chats/contacts');
           dispatch(setContacts({ role: 'director', contacts: contactsRes.data }));
         } catch (fallbackErr) {
           console.error('Fallback error:', fallbackErr);
@@ -84,7 +84,7 @@ const DirectorCommunication = () => {
 
     fetchData();
 
-    socket.current = io('https://v2.skoolific.com');
+    socket.current = io('');
     socket.current.emit('join', directorId);
 
     socket.current.on('new_request', (request) => {
@@ -142,7 +142,7 @@ const DirectorCommunication = () => {
     
     setSending(true);
     try {
-      const response = await axios.post('https://v2.skoolific.com/api/chats/requests', {
+      const response = await axios.post('/api/chats/requests', {
         senderId: directorId,
         recipientId: activeChatId,
         questions: newRequestData.questions.filter(q => q.trim())
@@ -163,13 +163,13 @@ const DirectorCommunication = () => {
     if (answers.every(a => !a.trim())) return;
 
     try {
-      await axios.post(`https://v2.skoolific.com/api/chats/requests/${requestId}/respond`, {
+      await axios.post(`/api/chats/requests/${requestId}/respond`, {
         responses: answers.map(answer => ({ answer, timestamp: new Date().toISOString() }))
       });
       setResponseText({});
       
       // Refresh requests
-      const requestsRes = await axios.get(`https://v2.skoolific.com/api/chats/user/${directorId}`);
+      const requestsRes = await axios.get(`/api/chats/user/${directorId}`);
       requestsRes.data.forEach(request => {
         const otherUserId = request.sender_id === directorId ? request.recipient_id : request.sender_id;
         dispatch(addRequest({ userId: otherUserId, request }));

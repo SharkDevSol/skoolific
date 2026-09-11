@@ -27,7 +27,7 @@ import Select from '../../COMPONENTS/Select/Select';
 import Card from '../../COMPONENTS/Card/Card';
 import StatCard from '../../COMPONENTS/StatCard/StatCard';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com/api';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
 
 const MarkListView = () => {
   const { t } = useTranslation();

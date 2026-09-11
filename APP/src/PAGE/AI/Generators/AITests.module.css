@@ -1,0 +1,21 @@
+.container { max-width: 1200px; margin: 0 auto; padding: 30px; }
+.header { display: flex; align-items: center; gap: 16px; margin-bottom: 30px; }
+.headerIcon { width: 48px; height: 48px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; }
+.header h1 { margin: 0; font-size: 24px; color: #1e293b; }
+.header p { margin: 4px 0 0; color: #64748b; font-size: 14px; }
+.refreshBtn { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; font-size: 13px; color: #475569; }
+.refreshBtn:hover { background: #f8fafc; }
+.error { background: #fef2f2; color: #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #fecaca; }
+.placeholder { text-align: center; padding: 80px 20px; color: #94a3b8; }
+.placeholder p { margin: 8px 0; }
+.sub { font-size: 13px; color: #cbd5e1; }
+.generateBtn { margin-top: 16px; padding: 12px 24px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.testGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+.testCard { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; }
+.testHeader { display: flex; gap: 8px; margin-bottom: 12px; }
+.subjectBadge { background: #f3e8ff; color: #7c3aed; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.classBadge { background: #dbeafe; color: #1d4ed8; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.testCard h3 { margin: 0 0 6px; font-size: 16px; color: #1e293b; }
+.meta { margin: 0 0 14px; color: #64748b; font-size: 13px; }
+.playBtn { display: flex; align-items: center; gap: 6px; padding: 10px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; width: 100%; justify-content: center; }
+.playBtn:hover { background: #2563eb; }

@@ -6,6 +6,8 @@ import { Building2, User as UserIcon, Lock } from 'lucide-react';
 import styles from './GuardianLogin.module.css';
 import Input from './Input/Input';
 import Button from './Button/Button';
+import { getBranchCode, setBranchCode } from '../utils/branchCode';
+import { initGuardianPush, ensurePushPermission } from '../utils/pushNotifications';
 import ThemeToggle from './ThemeToggle/ThemeToggle';
 import LanguageSelector from './LanguageSelector/LanguageSelector';
 import Toast from './Toast/Toast';
@@ -19,23 +21,45 @@ const GuardianLogin = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('error');
   const [isLoading, setIsLoading] = useState(false);
+  const [notifDenied, setNotifDenied] = useState(false);
   const navigate = useNavigate();
+
+  // On app open: check notification permission. If denied, show a guide to settings.
+  React.useEffect(() => {
+    (async () => {
+      const res = await ensurePushPermission();
+      if (res.status === 'denied') {
+        setNotifDenied(true);
+      }
+    })();
+  }, []);
 
   // Load saved branch code from localStorage on mount
   React.useEffect(() => {
-    const savedBranchCode = localStorage.getItem('branchCode');
+    const savedBranchCode = getBranchCode();
     if (savedBranchCode) {
       setCredentials(prev => ({ ...prev, branchCode: savedBranchCode }));
     }
   }, []);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setCredentials(prev => ({ ...prev, [name]: value }));
+  // Auto-redirect if the guardian is already logged in (session persistence).
+  // Prevents the app asking for login again after it's closed/reopened.
+  React.useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('guardianUser') || 'null'); } catch (e) {}
+    if (token && user?.username) {
+      navigate(`/app/guardian/${user.username}`, { replace: true });
+    }
+  }, [navigate]);
+
+  const handleInputChange = (field, value) => {
+        const processedValue = field === 'branchCode' ? value.toUpperCase().trim() : value;
+        setCredentials(prev => ({ ...prev, [field]: processedValue }));
     
     // Clear error for this field when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
@@ -67,15 +91,21 @@ const GuardianLogin = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('/api/v2/auth/login', {
+      const response = await axios.post('/api/v2/branches/login', {
         ...credentials,
+        branchCode: (credentials.branchCode || '').toUpperCase().trim(),
         userType: 'guardian'
       });
-      
-      const { role } = response.data;
+
+      const { role } = response.data.user || {};
       
       if (role === 'guardian') {
-        localStorage.setItem('branchCode', credentials.branchCode);
+        setBranchCode(credentials.branchCode, true);
+        localStorage.setItem('authToken', response.data.token);
+        localStorage.setItem('guardianUser', JSON.stringify(response.data.user));
+        // Register this device for push notifications (safe no-op on plain web;
+        // fully guarded so it can never block or crash login)
+        initGuardianPush(credentials.username).catch(() => {});
         navigate(`/app/guardian/${credentials.username}`);
       } else {
         setToastMessage('Please use the Student Login page for student accounts.');
@@ -93,16 +123,16 @@ const GuardianLogin = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.headerControls}>
-        <LanguageSelector />
-        <ThemeToggle />
-      </div>
-
       <div className={styles.content}>
         <div className={styles.loginCard}>
+          <div className={styles.cardTopBar}>
+            <LanguageSelector />
+            <ThemeToggle />
+          </div>
+
           <div className={styles.logoSection}>
-            <img src="/skoolific-icon.png" alt="Skoolific" className={styles.logo} />
-            <h1 className={styles.title}>{t('auth.guardianPortalTitle', 'Guardian Portal')}</h1>
+            <img src="/uploads/branding/icon-1785006632472.png" alt="IQRA" className={styles.logo} />
+            <h1 className={styles.title}>{t('auth.guardianPortalTitle', 'IQRA Parent')}</h1>
             <p className={styles.subtitle}>{t('auth.guardianPortalSubtitle', "Stay connected with your child's school")}</p>
           </div>
           
@@ -111,7 +141,7 @@ const GuardianLogin = () => {
               label={t('auth.branchCode', 'Branch Code')}
               name="branchCode"
               value={credentials.branchCode}
-              onChange={handleInputChange}
+              onChange={(value) => handleInputChange('branchCode', value)}
               onBlur={() => handleBlur('branchCode')}
               icon={<Building2 size={20} />}
               placeholder={t('auth.branchCodePlaceholder', 'Enter branch code')}
@@ -124,7 +154,7 @@ const GuardianLogin = () => {
               label={t('auth.username', 'Username')}
               name="username"
               value={credentials.username}
-              onChange={handleInputChange}
+              onChange={(value) => handleInputChange('username', value)}
               onBlur={() => handleBlur('username')}
               icon={<UserIcon size={20} />}
               placeholder={t('auth.usernamePlaceholder', 'Enter your username')}
@@ -139,7 +169,7 @@ const GuardianLogin = () => {
               type="password"
               name="password"
               value={credentials.password}
-              onChange={handleInputChange}
+              onChange={(value) => handleInputChange('password', value)}
               onBlur={() => handleBlur('password')}
               icon={<Lock size={20} />}
               placeholder={t('auth.passwordPlaceholder', 'Enter your password')}
@@ -177,6 +207,28 @@ const GuardianLogin = () => {
         duration={5000}
         position="top-right"
       />
+
+      {/* Notification permission denied — guide to settings */}
+      {notifDenied && (
+        <div className={styles.notifOverlay}>
+          <div className={styles.notifModal}>
+            <div className={styles.notifIcon}>🔔</div>
+            <h3 className={styles.notifTitle}>Enable Notifications</h3>
+            <p className={styles.notifDesc}>
+              Notifications are turned off. Turn them on so you receive updates
+              about your child's marks, payments and attendance.
+            </p>
+            <div className={styles.notifBtns}>
+              <button className={styles.notifBtnPrimary} onClick={() => setNotifDenied(false)}>
+                Open Settings
+              </button>
+              <button className={styles.notifBtnSecondary} onClick={() => setNotifDenied(false)}>
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

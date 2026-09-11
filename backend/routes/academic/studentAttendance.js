@@ -598,6 +598,14 @@ router.get('/settings', async (req, res) => {
     if (!settings.check_in_end_time) settings.check_in_end_time = '08:30:00';
     if (!settings.late_threshold_time) settings.late_threshold_time = '08:00:00';
     if (!settings.absent_marking_time) settings.absent_marking_time = '09:00:00';
+    if (!settings.shift1_check_in_start) settings.shift1_check_in_start = '07:00:00';
+    if (!settings.shift1_check_in_end) settings.shift1_check_in_end = '08:30:00';
+    if (!settings.shift1_late_threshold) settings.shift1_late_threshold = '08:00:00';
+    if (!settings.shift1_absent_marking) settings.shift1_absent_marking = '09:00:00';
+    if (!settings.shift2_check_in_start) settings.shift2_check_in_start = '13:00:00';
+    if (!settings.shift2_check_in_end) settings.shift2_check_in_end = '14:30:00';
+    if (!settings.shift2_late_threshold) settings.shift2_late_threshold = '14:00:00';
+    if (!settings.shift2_absent_marking) settings.shift2_absent_marking = '15:00:00';
     if (!settings.auto_absent_enabled) settings.auto_absent_enabled = true;
     if (!settings.school_days || !Array.isArray(settings.school_days)) settings.school_days = [1,2,3,4,5];
 
@@ -859,6 +867,55 @@ router.put('/class-shifts', async (req, res) => {
     }
   } catch(e) {}
   res.json({ success: true, message: 'Class shifts saved. Note: shifts are now managed in Task 2.' });
+});
+
+// PUT /api/academic/student-attendance/class-configs
+// Update Task 2 class_configs (school_schema_points.classes.class_configs) — source of truth for class shifts
+router.put('/class-configs', async (req, res) => {
+  const { classConfigs } = req.body;
+  if (!classConfigs || typeof classConfigs !== 'object') {
+    return res.status(400).json({ error: 'Invalid classConfigs data' });
+  }
+  try {
+    const existing = await pool.query(`SELECT class_configs FROM school_schema_points.classes WHERE id = 1`).catch(() => ({ rows: [] }));
+    const merged = {};
+    if (existing.rows.length > 0 && existing.rows[0].class_configs) {
+      Object.assign(merged, existing.rows[0].class_configs);
+    }
+    for (const [className, cfg] of Object.entries(classConfigs)) {
+      const prev = merged[className] || {};
+      merged[className] = {
+        shift: cfg.shift !== undefined ? Number(cfg.shift) : (prev.shift || 1),
+        isKG: cfg.isKG !== undefined ? Boolean(cfg.isKG) : (prev.isKG || false),
+        isEvening: cfg.isEvening !== undefined ? Boolean(cfg.isEvening) : (prev.isEvening || false)
+      };
+    }
+    await pool.query(`
+      INSERT INTO school_schema_points.classes (id, class_count, class_names, custom_fields, class_configs)
+      VALUES (1, COALESCE((SELECT class_count FROM school_schema_points.classes WHERE id = 1), 0),
+              COALESCE((SELECT class_names FROM school_schema_points.classes WHERE id = 1), '{}'),
+              COALESCE((SELECT custom_fields FROM school_schema_points.classes WHERE id = 1), '[]'::jsonb),
+              $1::jsonb)
+      ON CONFLICT (id) DO UPDATE SET class_configs = EXCLUDED.class_configs
+    `, [JSON.stringify(merged)]);
+
+    // Mirror to legacy table for backward compatibility
+    try {
+      for (const [className, cfg] of Object.entries(merged)) {
+        await pool.query(`
+          INSERT INTO academic_class_shift_assignment (class_name, shift_number, updated_at)
+          VALUES ($1, $2, NOW())
+          ON CONFLICT (class_name)
+          DO UPDATE SET shift_number = $2, updated_at = NOW()
+        `, [className, cfg.shift || 1]).catch(() => {});
+      }
+    } catch(e) {}
+
+    res.json({ success: true, message: 'Class configurations updated successfully', data: merged });
+  } catch (error) {
+    console.error('Error updating class configs:', error);
+    res.status(500).json({ error: 'Failed to update class configs' });
+  }
 });
 
 module.exports = router;

@@ -1,6 +1,6 @@
-/* Profile Header - Modern Gradient Design */
+/* Profile Header - Modern purple theme (consistent with app) */
 .profileHeader {
-  background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+  background: linear-gradient(165deg, #4c1d95 0%, #7c3aed 100%);
   color: white;
   padding: 32px 20px 48px;
   text-align: center;
@@ -15,7 +15,7 @@
   left: 0;
   right: 0;
   height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--bg-color);
   clip-path: ellipse(60% 100% at 50% 100%);
 }
 

@@ -6,7 +6,7 @@ import { FiPlus, FiTrash2, FiSave, FiX, FiEdit2, FiList,
 import styles from './EvaluationBookFormBuilder.module.css';
 import EvaluationBookReports from './EvaluationBookReports';
 
-const API_BASE = `${import.meta.env.VITE_API_URL || '/api'}/evaluation-book`;
+const API_BASE = `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/evaluation-book`;
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text Input', icon: FiType },

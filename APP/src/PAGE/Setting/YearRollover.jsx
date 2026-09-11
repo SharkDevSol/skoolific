@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { FiAlertTriangle, FiDownload, FiArchive, FiRefreshCw, FiUsers, FiBook, FiCalendar } from 'react-icons/fi';
+import { getBranchCode } from '../../utils/branchCode';
 import styles from './YearRollover.module.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const branchHeaders = () => ({ 'x-branch-code': (localStorage.getItem('branchCode') || '').toUpperCase() });
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
+const branchHeaders = () => ({ 'x-branch-code': (getBranchCode() || '').toUpperCase() });
 const authHeaders = () => {
   const token = localStorage.getItem('authToken') || localStorage.getItem('token');
   return { ...branchHeaders(), ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };

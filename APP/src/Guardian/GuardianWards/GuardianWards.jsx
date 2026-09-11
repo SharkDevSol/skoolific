@@ -18,7 +18,7 @@ const GuardianWards = () => {
     try {
       const guardianInfo = JSON.parse(localStorage.getItem('guardianInfo') || '{}');
       const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
-      const guardiansResponse = await axios.get(`${import.meta.env.VITE_API_URL || '/api'}/guardian-list/guardians`);
+      const guardiansResponse = await axios.get(`${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/guardian-list/guardians`);
       const currentGuardian = guardiansResponse.data.find(
         guardian => guardian.guardian_username === guardianInfo.guardian_username ||
                    guardian.guardian_phone === guardianInfo.guardian_phone

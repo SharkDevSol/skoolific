@@ -2,10 +2,16 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FiUser, FiUsers, FiFileText, FiMessageSquare, FiPhone, FiList, FiCalendar, FiSettings, FiBook, FiSend, FiCheck, FiAlertCircle, FiPlus, FiX, FiSearch, FiDollarSign, FiBell } from 'react-icons/fi';
+import { FiUser, FiUsers, FiFileText, FiMessageSquare, FiPhone, FiList, FiCalendar, FiSettings, FiBook, FiSend, FiCheck, FiAlertCircle, FiPlus, FiX, FiSearch, FiDollarSign, FiBell, FiAward, FiMoreHorizontal } from 'react-icons/fi';
+import { getBranchCode } from '../utils/branchCode';
+import { initGuardianPush, ensurePushPermission } from '../utils/pushNotifications';
 import GuardianCommunications from '../PAGE/Communication/GuardianCommunications';
 import ChatWindow from '../COMPONENTS/Chat/ChatWindow';
 import ConversationList from '../COMPONENTS/Chat/ConversationList';
+import ReportCardFront from '../PAGE/CreateMarklist/ReportCard/ReportCardFront';
+import reportCardStyles from '../PAGE/CreateMarklist/ReportCard/ReportCard.module.css';
+import InvoiceReceipt from './InvoiceReceipt';
+import { numberToWords } from '../utils/numberToWords';
 import { AttendanceViewSelector, MonthlySummaryView, TrendsView } from './GuardianAttendanceEnhanced';
 import { useApp } from '../context/AppContext';
 import {
@@ -82,35 +88,59 @@ const GuardianProfile = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+
+  // Report card state
+  const [reportCard, setReportCard] = useState(null);
+  const [reportCardLoading, setReportCardLoading] = useState(false);
+  const [reportCardWard, setReportCardWard] = useState(null);
+  const [reportData, setReportData] = useState(null);
+  const [schoolInfo, setSchoolInfo] = useState({
+    name: 'IQRA ACADEMY',
+    address: '',
+    phone: '',
+    email: '',
+    academicYear: '',
+    logo: null,
+    website_icon: null
+  });
+  const [activeStudent, setActiveStudent] = useState(null); // currently selected student across tabs
+  const [activePaymentWard, setActivePaymentWard] = useState(null); // selected student in payments tab
+  const [receiptVoucher, setReceiptVoucher] = useState(null); // Cash Receipt Voucher modal data
+  const [hasNewMarks, setHasNewMarks] = useState(false);
+  const [hasNewPayments, setHasNewPayments] = useState(false);
   
   const toast = useToast();
 
   const navItems = [
     { id: 'profile', label: 'Profile', icon: <FiUser /> },
     { id: 'marklist', label: 'Marks', icon: <FiList /> },
-    { id: 'posts', label: 'Posts', icon: <FiFileText />, centered: true },
+    { id: 'reportcard', label: 'Report Card', icon: <FiAward /> },
     { id: 'payments', label: 'Payments', icon: <FiDollarSign /> },
-    { id: 'evalbook', label: 'Eval Book', icon: <FiBook /> },
-    { id: 'attendance', label: 'Attendance', icon: <FiCalendar /> },
-    { id: 'communications', label: 'Messages', icon: <FiMessageSquare /> },
-    { id: 'settings', label: 'Settings', icon: <FiSettings /> }
+    { id: 'more', label: 'More', icon: <FiMoreHorizontal /> }
   ];
 
   const fetchProfile = useCallback(async () => {
     try {
       // First verify guardian role
-      const response = await axios.get(`https://v2.skoolific.com/api/students/guardian-profile/${username}`);
+      const response = await axios.get(`/api/students/guardian-profile/${username}`, { headers: { 'x-branch-code': (getBranchCode() || '').toUpperCase() } });
       if (response.data.role !== 'guardian') {
         setError('This page is for guardians only.');
         return;
       }
-      
-      // Fetch all guardians with associated students (same as ListGuardian)
-      const guardiansResponse = await axios.get('https://v2.skoolific.com/api/guardian-list/guardians');
-      const currentGuardian = guardiansResponse.data.find(
-        guardian => guardian.guardian_username === username
-      );
-      
+
+      // Fetch all guardians with associated students (same as ListGuardian).
+      // This endpoint requires auth — if it fails (e.g. token missing/expired),
+      // fall back to the guardian-profile data instead of breaking the page.
+      let currentGuardian = null;
+      try {
+        const guardiansResponse = await axios.get('/api/guardian-list/guardians');
+        currentGuardian = guardiansResponse.data.find(
+          guardian => guardian.guardian_username === username
+        );
+      } catch (listErr) {
+        console.warn('guardian-list fetch failed, using guardian-profile fallback:', listErr.message);
+      }
+
       if (currentGuardian) {
         // Set all associated students from all class tables
         setWards(currentGuardian.students || []);
@@ -141,7 +171,7 @@ const GuardianProfile = () => {
 
   const fetchProfilePosts = useCallback(async (schoolId) => {
     try {
-      const response = await axios.get(`https://v2.skoolific.com/api/posts/profile/guardian/${schoolId}`);
+      const response = await axios.get(`/api/posts/profile/guardian/${schoolId}`);
       setProfilePosts(response.data.map(post => ({ ...post, localLikes: post.likes || 0 })));
     } catch (err) {
       console.error('Error fetching profile posts:', err);
@@ -156,6 +186,17 @@ const GuardianProfile = () => {
     }
   }, [username, fetchProfile]);
 
+  // On profile open (e.g. auto-redirect after login), ensure notification
+  // permission is granted and register the device token for this guardian.
+  useEffect(() => {
+    (async () => {
+      const res = await ensurePushPermission();
+      if (res.status === 'granted' && username) {
+        initGuardianPush(username).catch(() => {});
+      }
+    })();
+  }, [username]);
+
   useEffect(() => {
     if (wards.length > 0) {
       fetchProfilePosts(wards[0].school_id);
@@ -169,7 +210,7 @@ const GuardianProfile = () => {
     setMarksLoading(true);
     try {
       const response = await axios.get(
-        `https://v2.skoolific.com/api/mark-list/guardian-marks/${encodeURIComponent(guardianUsername)}`
+        `/api/mark-list/guardian-marks/${encodeURIComponent(guardianUsername)}`
       );
       if (response.data.success) {
         // Organize marks by student school_id for easy access
@@ -201,6 +242,137 @@ const GuardianProfile = () => {
       }
     }
   }, [activeTab, guardianInfo?.guardian_username, wardMarks, fetchAllWardsMarks]);
+
+  // Fetch school branding once for the report card + receipt voucher
+  useEffect(() => {
+    const fetchBranding = async () => {
+      try {
+        const res = await axios.get('/api/admin/branding');
+        const b = res.data;
+        const baseUrl = window.location.origin || '';
+        setSchoolInfo(prev => ({
+          ...prev,
+          name: b.website_name || 'IQRA ACADEMY',
+          address: b.school_address || '',
+          phone: b.school_phone || '',
+          email: b.school_email || '',
+          academicYear: b.academic_year || '',
+          // Prefer school_logo; fall back to website_icon (IQRA favicon) when
+          // school_logo is null/empty — this is the case on iqra.skoolific.com.
+          logo: b.school_logo
+            ? `${baseUrl}/uploads/branding/${b.school_logo}`
+            : b.website_icon
+              ? `${baseUrl}/uploads/branding/${b.website_icon}`
+              : null,
+          website_icon: b.website_icon ? `${baseUrl}/uploads/branding/${b.website_icon}` : null
+        }));
+      } catch (e) {
+        console.warn('Branding fetch failed (using defaults):', e.message);
+      }
+    };
+    fetchBranding();
+  }, []);
+
+  // Build the full report card preview data (same shape ReportCardFront expects)
+  // from the full-ranking payload for the selected ward.
+  const buildReportData = useCallback((full, ward) => {
+    if (!full || !Array.isArray(full.terms)) return null;
+    const termsData = full.terms || [];
+    const allSubjects = full.allSubjects || [];
+    const termCount = full.termCount || termsData.length || 2;
+    const studentName = ward?.student_name || '';
+
+    const termData = {};
+    const studentRanks = {};
+    termsData.forEach(term => {
+      const tn = term.termNumber;
+      const student = term.rankings?.find(r => (r.studentName || '').trim() === studentName.trim());
+      if (student) {
+        termData[tn] = student;
+        studentRanks[tn] = student.rank || '-';
+      }
+    });
+
+    // combined subject data + term totals/averages
+    const combinedSubjects = {};
+    let totals = {};
+    let counts = {};
+    allSubjects.forEach(subject => {
+      const marks = {};
+      let sum = 0, count = 0;
+      termsData.forEach(term => {
+        const tn = term.termNumber;
+        const student = termData[tn];
+        const mark = student?.subjects?.[subject]?.total;
+        marks[tn] = mark ?? '';
+        if (mark) { sum += parseFloat(mark); count++; totals[tn] = (totals[tn] || 0) + parseFloat(mark); counts[tn] = (counts[tn] || 0) + 1; }
+      });
+      combinedSubjects[subject] = { marks, average: count > 0 ? (sum / count).toFixed(1) : '' };
+    });
+
+    const termTotals = {};
+    const termAverages = {};
+    let combinedTotal = 0, combinedCount = 0;
+    termsData.forEach(term => {
+      const tn = term.termNumber;
+      const t = totals[tn] || 0;
+      const c = counts[tn] || 0;
+      termTotals[tn] = t > 0 ? t.toFixed(0) : '';
+      termAverages[tn] = c > 0 ? (t / c).toFixed(1) : '';
+      combinedTotal += t; combinedCount += c;
+    });
+
+    return {
+      studentName,
+      className: ward?.class || '',
+      termCount,
+      terms: termsData.map(t => t.termNumber),
+      termData,
+      studentRanks,
+      subjects: allSubjects,
+      subjectsData: combinedSubjects,
+      totals: termTotals,
+      averages: termAverages,
+      combinedAverage: combinedCount > 0 ? (combinedTotal / combinedCount).toFixed(1) : '',
+      gender: ward?.gender || '',
+      age: ward?.age || '',
+      photo: ''
+    };
+  }, []);
+
+  // Fetch the full report card (all terms + ranks) for a single ward's class
+  const fetchReportCard = useCallback(async (ward) => {
+    if (!ward?.class) return;
+    setReportCardLoading(true);
+    setReportCardWard(ward);
+    try {
+      const className = encodeURIComponent(ward.class);
+      const response = await axios.get(`/api/mark-list/full-ranking/${className}`);
+      if (response.data && Array.isArray(response.data.terms)) {
+        setReportCard(response.data);
+        setReportData(buildReportData(response.data, ward));
+      } else {
+        setReportCard(null);
+        setReportData(null);
+      }
+    } catch (err) {
+      console.error('Error fetching report card:', err);
+      setReportCard(null);
+      setReportData(null);
+    } finally {
+      setReportCardLoading(false);
+    }
+  }, [buildReportData]);
+
+  // Auto-load report card for the first ward when the tab opens
+  useEffect(() => {
+    if (activeTab === 'reportcard' && wards.length > 0) {
+      const target = reportCardWard || wards[0];
+      if (reportCardWard?.student_name !== target.student_name || !reportCard) {
+        fetchReportCard(target);
+      }
+    }
+  }, [activeTab, wards, reportCardWard, reportCard, fetchReportCard]);
 
   // Helper function: Map attendance value to display indicator
   const getAttendanceIndicator = (value) => {
@@ -234,7 +406,7 @@ const GuardianProfile = () => {
     try {
       // Fetch current month's attendance using Ethiopian calendar
       const response = await axios.get(
-        `https://v2.skoolific.com/api/guardian-student-attendance/student-attendance/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${selectedYear}&month=${selectedMonth}`
+        `/api/guardian-student-attendance/student-attendance/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${selectedYear}&month=${selectedMonth}`
       );
       
       // Store the attendance data
@@ -260,7 +432,7 @@ const GuardianProfile = () => {
     try {
       const className = ward.class.replace(/\s+/g, '_');
       const response = await axios.get(
-        `https://v2.skoolific.com/api/guardian-attendance/student/${encodeURIComponent(className)}/${encodeURIComponent(tableName)}/${ward.school_id}`
+        `/api/guardian-attendance/student/${encodeURIComponent(className)}/${encodeURIComponent(tableName)}/${ward.school_id}`
       );
       setWardAttendance(prev => ({
         ...prev,
@@ -281,13 +453,13 @@ const GuardianProfile = () => {
     try {
       // Fetch summary
       const summaryResponse = await axios.get(
-        `https://v2.skoolific.com/api/guardian-student-attendance/monthly-summary/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${year}&month=${month}`
+        `/api/guardian-student-attendance/monthly-summary/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${year}&month=${month}`
       );
       setMonthlySummary(summaryResponse.data);
 
       // Fetch daily details
       const dailyResponse = await axios.get(
-        `https://v2.skoolific.com/api/guardian-student-attendance/student-attendance/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${year}&month=${month}`
+        `/api/guardian-student-attendance/student-attendance/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${year}&month=${month}`
       );
       setDailyAttendance(dailyResponse.data.attendance || []);
     } catch (err) {
@@ -303,7 +475,7 @@ const GuardianProfile = () => {
     setAttendanceLoading(true);
     try {
       const response = await axios.get(
-        `https://v2.skoolific.com/api/guardian-student-attendance/trends/${encodeURIComponent(ward.class)}/${ward.school_id}`
+        `/api/guardian-student-attendance/trends/${encodeURIComponent(ward.class)}/${ward.school_id}`
       );
       setAttendanceTrends(response.data.trends || []);
     } catch (err) {
@@ -319,7 +491,7 @@ const GuardianProfile = () => {
     try {
       const className = ward.class.replace(/\s+/g, '_');
       const response = await axios.get(
-        `https://v2.skoolific.com/api/guardian-attendance/report/${encodeURIComponent(className)}/${ward.school_id}/${year}/${month}`,
+        `/api/guardian-attendance/report/${encodeURIComponent(className)}/${ward.school_id}/${year}/${month}`,
         { responseType: 'blob' }
       );
       
@@ -376,7 +548,7 @@ const GuardianProfile = () => {
     try {
       // First try fetching by guardian_id
       const response = await axios.get(
-        `https://v2.skoolific.com/api/evaluation-book/daily/guardian/${encodeURIComponent(guardianId)}`
+        `/api/evaluation-book/daily/guardian/${encodeURIComponent(guardianId)}`
       );
       let evaluations = response.data || [];
       
@@ -388,7 +560,7 @@ const GuardianProfile = () => {
           if (ward.class && ward.student_name) {
             try {
               const classResponse = await axios.get(
-                `https://v2.skoolific.com/api/evaluation-book/daily/class/${encodeURIComponent(ward.class)}`
+                `/api/evaluation-book/daily/class/${encodeURIComponent(ward.class)}`
               );
               const wardEvals = (classResponse.data || []).filter(
                 e => e.student_name === ward.student_name
@@ -428,7 +600,7 @@ const GuardianProfile = () => {
     try {
       console.log('Fetching payments for guardian:', guardianUsername);
       const response = await axios.get(
-        `https://v2.skoolific.com/api/guardian-payments/${encodeURIComponent(guardianUsername)}`
+        `/api/guardian-payments/${encodeURIComponent(guardianUsername)}`
       );
       console.log('Payments API Response:', response.data);
       if (response.data.success) {
@@ -471,7 +643,7 @@ const GuardianProfile = () => {
           const today = new Date();
           const ethDate = gregorianToEthiopian(today);
           const response = await axios.get(
-            `https://v2.skoolific.com/api/guardian-student-attendance/student-attendance/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${ethDate.year}&month=${ethDate.month}`
+            `/api/guardian-student-attendance/student-attendance/${encodeURIComponent(ward.class)}/${ward.school_id}?year=${ethDate.year}&month=${ethDate.month}`
           );
           
           const todayAttendance = response.data.attendance?.find(a => {
@@ -498,56 +670,94 @@ const GuardianProfile = () => {
       // Fetch payment notifications
       try {
         const paymentResponse = await axios.get(
-          `https://v2.skoolific.com/api/guardian-payments/${encodeURIComponent(guardianInfo.guardian_username)}`
+          `/api/guardian-payments/${encodeURIComponent(guardianInfo.guardian_username)}`
         );
         
         if (paymentResponse.data.success) {
           paymentResponse.data.data.payments?.forEach(wardPayment => {
-            // Add notification for unpaid invoices
-            const unpaidInvoices = wardPayment.invoices?.filter(inv => 
-              inv.status === 'ISSUED' || inv.status === 'OVERDUE' || inv.status === 'PARTIALLY_PAID'
+            // Unlocked but unpaid months
+            const unpaidInvoices = (wardPayment.monthlyPayments || []).filter(inv =>
+              !inv.isPaid && (inv.status === 'ISSUED' || inv.status === 'OVERDUE')
             );
             
-            if (unpaidInvoices && unpaidInvoices.length > 0) {
-              const totalUnpaid = unpaidInvoices.reduce((sum, inv) => 
-                sum + (parseFloat(inv.netAmount) - parseFloat(inv.paidAmount)), 0
-              );
-              
+            if (unpaidInvoices.length > 0) {
+              const totalUnpaid = unpaidInvoices.reduce((sum, inv) => sum + inv.balance, 0);
+              const monthNames = unpaidInvoices.map(inv => inv.month).join(', ');
               notificationsList.push({
-                id: `pay_${wardPayment.ward.schoolId}_${Date.now()}`,
+                id: `pay_unpaid_${wardPayment.ward.schoolId}_${monthNames}`,
                 type: 'payment',
-                title: 'Payment Reminder',
-                message: `Outstanding balance of ETB ${totalUnpaid.toFixed(2)} for ${wardPayment.ward.studentName}`,
+                title: 'Unlocked Month Not Paid',
+                message: `${wardPayment.ward.studentName}: ${unpaidInvoices.length} month(s) unlocked & unpaid (${monthNames}). Balance ETB ${totalUnpaid.toFixed(2)}`,
                 date: new Date().toISOString(),
                 read: false,
                 ward: wardPayment.ward.studentName
               });
             }
             
-            // Add notification for recent payments
-            const recentPayments = wardPayment.invoices?.filter(inv => {
-              const paidDate = new Date(inv.updatedAt);
-              const daysDiff = (new Date() - paidDate) / (1000 * 60 * 60 * 24);
-              return inv.status === 'PAID' && daysDiff <= 7;
+            // Recently paid invoices
+            const recentPayments = (wardPayment.monthlyPayments || []).filter(inv => {
+              if (inv.status !== 'PAID') return false;
+              const last = inv.payments?.[inv.payments.length - 1];
+              const paidDate = last?.paymentDate || inv.dueDate;
+              const daysDiff = (new Date() - new Date(paidDate)) / (1000 * 60 * 60 * 24);
+              return daysDiff <= 7;
             });
             
-            if (recentPayments && recentPayments.length > 0) {
-              recentPayments.forEach(payment => {
-                notificationsList.push({
-                  id: `pay_received_${payment.id}`,
-                  type: 'payment',
-                  title: 'Payment Received',
-                  message: `Payment of ETB ${parseFloat(payment.paidAmount).toFixed(2)} received for ${wardPayment.ward.studentName}. Thank you!`,
-                  date: payment.updatedAt,
-                  read: false,
-                  ward: wardPayment.ward.studentName
-                });
+            recentPayments.forEach(payment => {
+              notificationsList.push({
+                id: `pay_received_${payment.invoiceId || payment.invoiceNumber}`,
+                type: 'payment',
+                title: 'Payment Received',
+                message: `Payment of ETB ${parseFloat(payment.paidAmount).toFixed(2)} received for ${wardPayment.ward.studentName} (${payment.month}). Thank you!`,
+                date: new Date().toISOString(),
+                read: false,
+                ward: wardPayment.ward.studentName
               });
-            }
+            });
           });
         }
       } catch (err) {
         console.error('Error fetching payment notifications:', err);
+      }
+
+      // Fetch marks and flag newly-added marks (updated within the last 7 days)
+      try {
+        const marksResponse = await axios.get(
+          `/api/mark-list/guardian-marks/${encodeURIComponent(guardianInfo.guardian_username)}`
+        );
+        if (marksResponse.data.success) {
+          const marks = marksResponse.data.data.marks || [];
+          // Group recent marks (updated_at within 7 days) by ward
+          const recentByWard = {};
+          marks.forEach(mark => {
+            const updated = mark.details?.updated_at ? new Date(mark.details.updated_at) : null;
+            if (!updated) return;
+            const daysDiff = (new Date() - updated) / (1000 * 60 * 60 * 24);
+            if (daysDiff <= 7) {
+              if (!recentByWard[mark.ward]) recentByWard[mark.ward] = [];
+              recentByWard[mark.ward].push(mark);
+            }
+          });
+          Object.entries(recentByWard).forEach(([wardName, wardMarksList]) => {
+            const subjects = wardMarksList
+              .map(m => `${m.subject} (${parseFloat(m.total).toFixed(0)})`)
+              .slice(0, 5)
+              .join(', ');
+            const more = wardMarksList.length > 5 ? ` +${wardMarksList.length - 5} more` : '';
+            notificationsList.push({
+              id: `marks_${wardName}_${Date.now()}`,
+              type: 'marks',
+              title: `New Marks Added — ${wardName}`,
+              message: `${wardMarksList.length} mark(s) updated: ${subjects}${more}`,
+              date: new Date().toISOString(),
+              read: false,
+              ward: wardName
+            });
+            setHasNewMarks(true);
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching marks notifications:', err);
       }
       
       // Sort by date (newest first)
@@ -622,7 +832,7 @@ const GuardianProfile = () => {
     }
     setFeedbackSaving(true);
     try {
-      await axios.post('https://v2.skoolific.com/api/evaluation-book/feedback', {
+      await axios.post('/api/evaluation-book/feedback', {
         daily_evaluation_id: selectedEvaluation.id,
         guardian_id: guardianInfo?.guardian_username,
         feedback_text: feedbackText.trim()
@@ -662,7 +872,7 @@ const GuardianProfile = () => {
 
   const handleLike = async (postId) => {
     try {
-      await axios.put(`https://v2.skoolific.com/api/posts/${postId}/like`);
+      await axios.put(`/api/posts/${postId}/like`);
       setProfilePosts(prev =>
         prev.map(post =>
           post.id === postId
@@ -678,6 +888,13 @@ const GuardianProfile = () => {
   };
 
   const handleLogout = () => {
+    // Clear the saved session so the app doesn't auto-login again
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('guardianUser');
+    localStorage.removeItem('rememberedBranchCode');
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('guardianUser');
+    sessionStorage.removeItem('branchCode');
     navigate('/app/guardian-login');
   };
 
@@ -719,7 +936,7 @@ const GuardianProfile = () => {
             const getImageUrl = (imagePath) => {
               if (!imagePath) return null;
               const cleanPath = imagePath.replace(/^\/?(uploads|Uploads)\//i, '');
-              return `https://v2.skoolific.com/uploads/${cleanPath}`;
+              return `/uploads/${cleanPath}`;
             };
             
             return (
@@ -771,9 +988,29 @@ const GuardianProfile = () => {
   const renderMarkListTab = () => {
     const currentMarks = selectedMarkWard ? wardMarks[selectedMarkWard.school_id] || [] : [];
     
+    // Standard component order + max marks (matches create-mark-list config)
+    const componentDefs = [
+      { key: 'practical_1', name: 'Practical 1', max: 5 },
+      { key: 'test_1', name: 'Test 1', max: 10 },
+      { key: 'practical_2', name: 'Practical 2', max: 5 },
+      { key: 'test_2', name: 'Test 2', max: 10 },
+      { key: 'mid', name: 'Mid Exam', max: 30 },
+      { key: 'book', name: 'Book', max: 5 },
+      { key: 'final', name: 'Final Exam', max: 35 },
+    ];
+
+    // Group marks by term
+    const marksByTerm = currentMarks.reduce((acc, m) => {
+      const t = m.term || 1;
+      if (!acc[t]) acc[t] = [];
+      acc[t].push(m);
+      return acc;
+    }, {});
+    const terms = Object.keys(marksByTerm).map(Number).sort((a, b) => a - b);
+
     return (
       <div className={styles.markListContainer}>
-        <h2 className={styles.tabTitle}>Ward Report Cards</h2>
+        <h2 className={styles.tabTitle}>Ward Marks</h2>
         
         {/* Ward Selector */}
         {wards.length > 1 && (
@@ -782,12 +1019,7 @@ const GuardianProfile = () => {
               <button
                 key={ward.school_id}
                 className={`${styles.wardSelectorBtn} ${selectedMarkWard?.school_id === ward.school_id ? styles.wardSelectorActive : ''}`}
-                onClick={() => {
-                  setSelectedMarkWard(ward);
-                  if (!wardMarks[ward.school_id]) {
-                    fetchWardMarks(ward);
-                  }
-                }}
+                onClick={() => setSelectedMarkWard(ward)}
               >
                 <span className={styles.wardSelectorAvatar}>
                   {ward.student_name?.charAt(0)}
@@ -809,35 +1041,89 @@ const GuardianProfile = () => {
         {marksLoading ? (
           <SkeletonLoader type="card" count={3} />
         ) : currentMarks.length > 0 ? (
-          <div className={styles.markListCards}>
-            {currentMarks.map((subject, index) => (
-              <div key={index} className={styles.subjectCard}>
-                <div className={styles.subjectHeader}>
-                  <span className={styles.subjectName}>{subject.subject_name}</span>
-                  <span className={`${styles.statusBadge} ${subject.pass_status === 'Pass' ? styles.statusPass : styles.statusFail}`}>
-                    {subject.pass_status}
-                  </span>
-                </div>
-                <div className={styles.marksGrid}>
-                  {subject.components && subject.components.map((comp, idx) => (
-                    <div key={idx} className={styles.markItem}>
-                      <span className={styles.markLabel}>{comp.name}</span>
-                      <span className={styles.markValue}>{comp.score}/{comp.max}</span>
+          terms.map((term) => (
+            <div key={term} className={styles.termSection}>
+              <h3 className={styles.termHeading}>Term {term}</h3>
+              <div className={styles.markListCards}>
+                {marksByTerm[term].map((subject, index) => {
+                  const total = parseFloat(subject.total || 0);
+                  const detail = subject.details || {};
+                  return (
+                    <div key={index} className={styles.subjectCard}>
+                      <div className={styles.subjectHeader}>
+                        <span className={styles.subjectName}>{subject.subject}</span>
+                        <span className={`${styles.statusBadge} ${subject.pass_status === 'Pass' ? styles.statusPass : styles.statusFail}`}>
+                          {subject.pass_status}
+                        </span>
+                      </div>
+                      <div className={styles.marksGrid}>
+                        {componentDefs.map((comp, idx) => (
+                          <div key={idx} className={styles.markItem}>
+                            <span className={styles.markLabel}>{comp.name}</span>
+                            <span className={styles.markValue}>
+                              {detail[comp.key] != null ? `${parseFloat(detail[comp.key])}/${comp.max}` : `—/${comp.max}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className={styles.totalRow}>
+                        <span className={styles.totalLabel}>Total</span>
+                        <span className={styles.totalValue}>{total}/100</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div className={styles.totalRow}>
-                  <span className={styles.totalLabel}>Total</span>
-                  <span className={styles.totalValue}>{subject.total}/100</span>
-                </div>
-                <div className={styles.termInfo}>Term {subject.term_number}</div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            </div>
+          ))
         ) : (
           <div className={styles.emptyState}>
             <FiList className={styles.emptyIcon} />
             <p>No marks available yet</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderReportCardTab = () => {
+    const selectedWard = reportCardWard || wards[0];
+
+    return (
+      <div className={styles.markListContainer}>
+        <h2 className={styles.tabTitle}>Report Card</h2>
+
+        {/* Ward Selector */}
+        {wards.length > 1 && (
+          <div className={styles.wardSelector}>
+            {wards.map((ward) => (
+              <button
+                key={ward.school_id}
+                className={`${styles.wardSelectorBtn} ${selectedWard?.school_id === ward.school_id ? styles.wardSelectorActive : ''}`}
+                onClick={() => { setReportCardWard(ward); setReportCard(null); setReportData(null); fetchReportCard(ward); }}
+              >
+                <span className={styles.wardSelectorAvatar}>
+                  {ward.student_name?.charAt(0)}
+                </span>
+                <span className={styles.wardSelectorName}>{ward.student_name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {reportCardLoading ? (
+          <SkeletonLoader type="card" count={3} />
+        ) : !reportData ? (
+          <div className={styles.emptyState}>
+            <FiAward className={styles.emptyIcon} />
+            <p>No report card available yet</p>
+          </div>
+        ) : (
+          <div className={styles.reportCardPreviewSection}>
+            <h3 className={styles.previewTitle}>Preview - IQRA Academy Report Card</h3>
+            <div className={styles.reportCardPreview}>
+              <ReportCardFront data={reportData} schoolInfo={schoolInfo} />
+            </div>
           </div>
         )}
       </div>
@@ -1057,7 +1343,7 @@ const GuardianProfile = () => {
       // Initialize Socket.IO
       if (!socketRef.current) {
         console.log('Initializing socket for:', currentUserId);
-        socketRef.current = io('https://v2.skoolific.com');
+        socketRef.current = io('');
         socketRef.current.emit('join', currentUserId);
 
         socketRef.current.on('new_message', (data) => {
@@ -1097,7 +1383,7 @@ const GuardianProfile = () => {
 
   const fetchChatConversations = async (userId) => {
     try {
-      const res = await axios.get(`https://v2.skoolific.com/api/chats/conversations?userId=${userId}`);
+      const res = await axios.get(`/api/chats/conversations?userId=${userId}`);
       setConversations(res.data.map(c => ({ ...c, currentUserId: userId })));
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -1109,7 +1395,7 @@ const GuardianProfile = () => {
   const fetchChatContacts = async () => {
     setContactsLoading(true);
     try {
-      const teachersRes = await axios.get('https://v2.skoolific.com/api/chats/contacts/teachers');
+      const teachersRes = await axios.get('/api/chats/contacts/teachers');
       
       // Add the main admin (from /communication page)
       const mainAdmin = {
@@ -1136,10 +1422,10 @@ const GuardianProfile = () => {
   const fetchChatMessages = async (conversationId, userId) => {
     setMessagesLoading(true);
     try {
-      const res = await axios.get(`https://v2.skoolific.com/api/chats/conversations/${conversationId}/messages`);
+      const res = await axios.get(`/api/chats/conversations/${conversationId}/messages`);
       setMessages(res.data);
       
-      await axios.put('https://v2.skoolific.com/api/chats/messages/read', {
+      await axios.put('/api/chats/messages/read', {
         conversationId,
         userId
       });
@@ -1165,7 +1451,7 @@ const GuardianProfile = () => {
     
     try {
       const res = await axios.post(
-        `https://v2.skoolific.com/api/chats/conversations/${activeConversation.id}/messages`,
+        `/api/chats/conversations/${activeConversation.id}/messages`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
@@ -1202,7 +1488,7 @@ const GuardianProfile = () => {
     console.log('Guardian user ID:', currentUserId);
     
     try {
-      const res = await axios.post('https://v2.skoolific.com/api/chats/conversations', {
+      const res = await axios.post('/api/chats/conversations', {
         type: 'direct',
         participants: [
           { user_id: currentUserId, user_name: currentUserName, user_type: currentUserType },
@@ -1217,7 +1503,7 @@ const GuardianProfile = () => {
       await fetchChatConversations(currentUserId);
       
       const newConv = res.data;
-      const convDetails = await axios.get(`https://v2.skoolific.com/api/chats/conversations/${newConv.id}`);
+      const convDetails = await axios.get(`/api/chats/conversations/${newConv.id}`);
       console.log('Conversation details:', convDetails.data);
       
       setActiveConversation(convDetails.data);
@@ -1344,7 +1630,7 @@ const GuardianProfile = () => {
   };
 
   const renderSettingsTab = () => (
-    <SettingsTab userId={username} userType="guardian" appType="guardian" appName="Guardian App" />
+    <SettingsTab userId={username} userType="guardian" appType="guardian" appName="Guardian App" onLogout={handleLogout} />
   );
 
   const renderEvalBookTab = () => {
@@ -1552,9 +1838,39 @@ const GuardianProfile = () => {
     );
   };
 
+  // Open the Cash Receipt Voucher as an in-app modal (not a new window).
+  const openCashReceiptVoucher = (wardPayment, payment) => {
+    const firstPmt = payment.payments?.[0] || {};
+    const amount = payment.paidAmount || payment.totalAmount || 0;
+    const receiptDate = firstPmt.paymentDate
+      ? new Date(firstPmt.paymentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : new Date(payment.issueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    setReceiptVoucher({
+      receiptNumber: payment.receiptNumber || payment.invoiceNumber || '',
+      date: receiptDate,
+      studentName: wardPayment.ward.studentName,
+      studentId: wardPayment.ward.schoolId || '',
+      className: wardPayment.ward.class || '',
+      monthsPaid: payment.month ? [payment.month] : [],
+      amountInWords: numberToWords(amount),
+      amountInFigures: amount.toFixed(2),
+      paymentMethod: firstPmt.paymentMethod || '',
+      cashierName: firstPmt.cashierName || '',
+      invoiceNumber: payment.invoiceNumber || '',
+      invoiceRefCode: payment.invoiceNumber || '',
+      schoolInfo
+    });
+  };
+
+  const closeReceiptVoucher = () => setReceiptVoucher(null);
+
   const renderPaymentsTab = () => {
-    console.log('Payment Tab Data:', { paymentLoading, paymentData, unpaidCount });
-    
+    const payWard = activePaymentWard || paymentData[0];
+    const wardPayment = payWard
+      ? paymentData.find(p => p.ward.studentName === payWard.ward.studentName) || null
+      : null;
+
     return (
       <div className={styles.paymentsContainer}>
         <h2 className={styles.tabTitle}>Monthly Payments</h2>
@@ -1572,6 +1888,21 @@ const GuardianProfile = () => {
           </div>
         )}
 
+        {/* Student tabs — one student at a time */}
+        {paymentData.length > 1 && (
+          <div className={styles.studentTabs}>
+            {paymentData.map(p => (
+              <button
+                key={p.ward.studentName}
+                className={`${styles.studentTab} ${wardPayment?.ward.studentName === p.ward.studentName ? styles.studentTabActive : ''}`}
+                onClick={() => setActivePaymentWard(p)}
+              >
+                {p.ward.studentName}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Loading State */}
         {paymentLoading && <SkeletonLoader type="card" count={3} />}
 
@@ -1583,164 +1914,156 @@ const GuardianProfile = () => {
           </div>
         )}
 
-        {/* Payment data */}
-        {!paymentLoading && paymentData.length > 0 && (
+        {/* Active student's payment data */}
+        {!paymentLoading && wardPayment && (
           <>
-            {paymentData.map((wardPayment, index) => (
-              <div key={index}>
-                {/* Ward Header */}
-                <div className={styles.wardHeader}>
-                  <div className={styles.wardAvatar}>
-                    {wardPayment.ward.studentName?.charAt(0)}
-                  </div>
-                  <div className={styles.wardInfo}>
-                    <h3 className={styles.wardName}>{wardPayment.ward.studentName}</h3>
-                    <span className={styles.wardClass}>Class {wardPayment.ward.class}</span>
-                  </div>
+            {/* Ward Header */}
+            <div className={styles.wardHeader}>
+              <div className={styles.wardAvatar}>
+                {wardPayment.ward.studentName?.charAt(0)}
+              </div>
+              <div className={styles.wardInfo}>
+                <h3 className={styles.wardName}>{wardPayment.ward.studentName}</h3>
+                <span className={styles.wardClass}>Class {wardPayment.ward.class}</span>
+              </div>
+            </div>
+
+            {/* Payment Summary Card */}
+            <div className={styles.paymentSummaryCard}>
+              <h3 className={styles.summaryTitle}>Payment Summary</h3>
+              <div className={styles.summaryGrid}>
+                <div className={styles.summaryItem}>
+                  <span className={styles.summaryLabel}>Total Invoices</span>
+                  <span className={styles.summaryValue}>{wardPayment.summary.totalInvoices}</span>
                 </div>
-
-                {/* Payment Summary Card */}
-                <div className={styles.paymentSummaryCard}>
-                  <h3 className={styles.summaryTitle}>Payment Summary</h3>
-                  <div className={styles.summaryGrid}>
-                    <div className={styles.summaryItem}>
-                      <span className={styles.summaryLabel}>Total Invoices</span>
-                      <span className={styles.summaryValue}>{wardPayment.summary.totalInvoices}</span>
-                    </div>
-                    <div className={styles.summaryItem}>
-                      <span className={styles.summaryLabel}>Paid</span>
-                      <span className={`${styles.summaryValue} ${styles.summaryPaid}`}>
-                        {wardPayment.summary.paidInvoices}
-                      </span>
-                    </div>
-                    <div className={styles.summaryItem}>
-                      <span className={styles.summaryLabel}>Unpaid</span>
-                      <span className={`${styles.summaryValue} ${styles.summaryUnpaid}`}>
-                        {wardPayment.summary.unpaidInvoices}
-                      </span>
-                    </div>
-                    <div className={styles.summaryItem}>
-                      <span className={styles.summaryLabel}>Total Paid</span>
-                      <span className={styles.summaryValue}>
-                        {wardPayment.summary.totalPaid.toFixed(2)} ETB
-                      </span>
-                    </div>
-                    <div className={styles.summaryItem}>
-                      <span className={styles.summaryLabel}>Balance Due</span>
-                      <span className={`${styles.summaryValue} ${styles.summaryBalance}`}>
-                        {wardPayment.summary.totalBalance.toFixed(2)} ETB
-                      </span>
-                    </div>
-                    {wardPayment.summary.overdueInvoices > 0 && (
-                      <div className={styles.summaryItem}>
-                        <span className={styles.summaryLabel}>Overdue</span>
-                        <span className={`${styles.summaryValue} ${styles.summaryOverdue}`}>
-                          {wardPayment.summary.overdueInvoices}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                <div className={styles.summaryItem}>
+                  <span className={styles.summaryLabel}>Paid</span>
+                  <span className={`${styles.summaryValue} ${styles.summaryPaid}`}>
+                    {wardPayment.summary.paidInvoices}
+                  </span>
                 </div>
-
-                {/* Monthly Payments List */}
-                {wardPayment.monthlyPayments && wardPayment.monthlyPayments.length > 0 ? (
-                  <div className={styles.monthlyPaymentsList}>
-                    <h3 className={styles.sectionTitle}>Monthly Invoices</h3>
-                    {wardPayment.monthlyPayments.map((payment, idx) => (
-                      <div 
-                        key={payment.invoiceId || idx} 
-                        className={`${styles.paymentCard} ${payment.isOverdue ? styles.paymentOverdue : ''} ${payment.isPaid ? styles.paymentPaid : ''}`}
-                      >
-                        <div className={styles.paymentHeader}>
-                          <div className={styles.paymentMonth}>
-                            <span className={styles.monthName}>{payment.month}</span>
-                            <span className={styles.invoiceNumber}>#{payment.invoiceNumber}</span>
-                          </div>
-                          <span className={`${styles.paymentStatus} ${styles[`status${payment.status}`]}`}>
-                            {payment.isPaid ? 'PAID' : payment.isOverdue ? 'OVERDUE' : payment.status}
-                          </span>
-                        </div>
-
-                        <div className={styles.paymentDetails}>
-                          <div className={styles.paymentRow}>
-                            <span className={styles.paymentLabel}>Issue Date:</span>
-                            <span className={styles.paymentValue}>
-                              {new Date(payment.issueDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div className={styles.paymentRow}>
-                            <span className={styles.paymentLabel}>Due Date:</span>
-                            <span className={styles.paymentValue}>
-                              {new Date(payment.dueDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div className={styles.paymentRow}>
-                            <span className={styles.paymentLabel}>Total Amount:</span>
-                            <span className={styles.paymentValue}>{payment.totalAmount.toFixed(2)} ETB</span>
-                          </div>
-                          <div className={styles.paymentRow}>
-                            <span className={styles.paymentLabel}>Paid Amount:</span>
-                            <span className={`${styles.paymentValue} ${styles.paidAmount}`}>
-                              {payment.paidAmount.toFixed(2)} ETB
-                            </span>
-                          </div>
-                          {payment.balance > 0 && (
-                            <div className={styles.paymentRow}>
-                              <span className={styles.paymentLabel}>Balance:</span>
-                              <span className={`${styles.paymentValue} ${styles.balanceAmount}`}>
-                                {payment.balance.toFixed(2)} ETB
-                              </span>
-                            </div>
-                          )}
-                          {payment.receiptNumber && (
-                            <div className={styles.paymentRow}>
-                              <span className={styles.paymentLabel}>Receipt:</span>
-                              <span className={styles.paymentValue}>{payment.receiptNumber}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Payment Items */}
-                        {payment.items && payment.items.length > 0 && (
-                          <div className={styles.paymentItems}>
-                            <span className={styles.itemsTitle}>Items:</span>
-                            {payment.items.map((item, itemIdx) => (
-                              <div key={itemIdx} className={styles.paymentItem}>
-                                <span className={styles.itemDescription}>{item.description}</span>
-                                <span className={styles.itemAmount}>{item.amount.toFixed(2)} ETB</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Payment History */}
-                        {payment.payments && payment.payments.length > 0 && (
-                          <div className={styles.paymentHistory}>
-                            <span className={styles.historyTitle}>Payment History:</span>
-                            {payment.payments.map((pmt, pmtIdx) => (
-                              <div key={pmtIdx} className={styles.historyItem}>
-                                <FiCheck className={styles.historyIcon} />
-                                <span className={styles.historyDate}>
-                                  {new Date(pmt.paymentDate).toLocaleDateString()}
-                                </span>
-                                <span className={styles.historyAmount}>{pmt.amount.toFixed(2)} ETB</span>
-                                <span className={styles.historyMethod}>{pmt.paymentMethod}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className={styles.emptyState}>
-                    <FiDollarSign className={styles.emptyIcon} />
-                    <p>No invoices have been generated for {wardPayment.ward.studentName} yet</p>
-                    <p className={styles.emptyHint}>Contact the school to generate monthly invoices</p>
+                <div className={styles.summaryItem}>
+                  <span className={styles.summaryLabel}>Unpaid</span>
+                  <span className={`${styles.summaryValue} ${styles.summaryUnpaid}`}>
+                    {wardPayment.summary.unpaidInvoices}
+                  </span>
+                </div>
+                <div className={styles.summaryItem}>
+                  <span className={styles.summaryLabel}>Total Paid</span>
+                  <span className={styles.summaryValue}>
+                    {wardPayment.summary.totalPaid.toFixed(2)} ETB
+                  </span>
+                </div>
+                <div className={styles.summaryItem}>
+                  <span className={styles.summaryLabel}>Balance Due</span>
+                  <span className={`${styles.summaryValue} ${styles.summaryBalance}`}>
+                    {wardPayment.summary.totalBalance.toFixed(2)} ETB
+                  </span>
+                </div>
+                {wardPayment.summary.overdueInvoices > 0 && (
+                  <div className={styles.summaryItem}>
+                    <span className={styles.summaryLabel}>Overdue</span>
+                    <span className={`${styles.summaryValue} ${styles.summaryOverdue}`}>
+                      {wardPayment.summary.overdueInvoices}
+                    </span>
                   </div>
                 )}
               </div>
-            ))}
+            </div>
+
+            {/* Monthly Payments List */}
+            {wardPayment.monthlyPayments && wardPayment.monthlyPayments.length > 0 ? (
+              <div className={styles.monthlyPaymentsList}>
+                <h3 className={styles.sectionTitle}>Monthly Invoices</h3>
+                {wardPayment.monthlyPayments.map((payment, idx) => (
+                  <div
+                    key={payment.invoiceId || idx}
+                    className={`${styles.paymentCard} ${payment.isOverdue ? styles.paymentOverdue : ''} ${payment.isPaid ? styles.paymentPaid : ''}`}
+                  >
+                    <div className={styles.paymentHeader}>
+                      <div className={styles.paymentMonth}>
+                        <span className={styles.monthName}>{payment.month}</span>
+                        <span className={styles.invoiceNumber}>#{payment.invoiceNumber}</span>
+                      </div>
+                      <div className={styles.paymentStatusGroup}>
+                        {!payment.isPaid && (
+                          <span className={styles.unlockedBadge}>UNLOCKED · NOT PAID</span>
+                        )}
+                        <span className={`${styles.paymentStatus} ${styles[`status${payment.status}`]}`}>
+                          {payment.isPaid ? 'PAID' : payment.isOverdue ? 'OVERDUE' : payment.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className={styles.paymentDetails}>
+                      <div className={styles.paymentRow}>
+                        <span className={styles.paymentLabel}>Issue Date:</span>
+                        <span className={styles.paymentValue}>
+                          {new Date(payment.issueDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className={styles.paymentRow}>
+                        <span className={styles.paymentLabel}>Due Date:</span>
+                        <span className={styles.paymentValue}>
+                          {new Date(payment.dueDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className={styles.paymentRow}>
+                        <span className={styles.paymentLabel}>Total Amount:</span>
+                        <span className={styles.paymentValue}>{payment.totalAmount.toFixed(2)} ETB</span>
+                      </div>
+                      <div className={styles.paymentRow}>
+                        <span className={styles.paymentLabel}>Paid Amount:</span>
+                        <span className={`${styles.paymentValue} ${styles.paidAmount}`}>
+                          {payment.paidAmount.toFixed(2)} ETB
+                        </span>
+                      </div>
+                      {payment.balance > 0 && (
+                        <div className={styles.paymentRow}>
+                          <span className={styles.paymentLabel}>Balance:</span>
+                          <span className={`${styles.paymentValue} ${styles.balanceAmount}`}>
+                            {payment.balance.toFixed(2)} ETB
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cash Receipt Voucher button (paid invoices only) */}
+                    {payment.isPaid && (
+                      <button
+                        className={styles.voucherButton}
+                        onClick={() => openCashReceiptVoucher(wardPayment, payment)}
+                      >
+                        <FiCheck /> Cash Receipt Voucher
+                      </button>
+                    )}
+
+                    {/* Payment History */}
+                    {payment.payments && payment.payments.length > 0 && (
+                      <div className={styles.paymentHistory}>
+                        <span className={styles.historyTitle}>Payment History:</span>
+                        {payment.payments.map((pmt, pmtIdx) => (
+                          <div key={pmtIdx} className={styles.historyItem}>
+                            <FiCheck className={styles.historyIcon} />
+                            <span className={styles.historyDate}>
+                              {new Date(pmt.paymentDate).toLocaleDateString()}
+                            </span>
+                            <span className={styles.historyAmount}>{pmt.amount.toFixed(2)} ETB</span>
+                            <span className={styles.historyMethod}>{pmt.paymentMethod}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                <FiDollarSign className={styles.emptyIcon} />
+                <p>No invoices have been generated for {wardPayment.ward.studentName} yet</p>
+                <p className={styles.emptyHint}>Contact the school to generate monthly invoices</p>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1804,12 +2127,42 @@ const GuardianProfile = () => {
     );
   };
 
+  const renderMoreTab = () => (
+    <div className={styles.moreContainer}>
+      <h2 className={styles.tabTitle}>More</h2>
+      <div className={styles.moreGrid}>
+        <button className={styles.moreItem} onClick={() => setActiveTab('posts')}>
+          <span className={styles.moreIcon}><FiFileText /></span>
+          <span className={styles.moreLabel}>Posts</span>
+        </button>
+        <button className={styles.moreItem} onClick={() => setActiveTab('evalbook')}>
+          <span className={styles.moreIcon}><FiBook /></span>
+          <span className={styles.moreLabel}>Eval Book</span>
+        </button>
+        <button className={styles.moreItem} onClick={() => setActiveTab('attendance')}>
+          <span className={styles.moreIcon}><FiCalendar /></span>
+          <span className={styles.moreLabel}>Attendance</span>
+        </button>
+        <button className={styles.moreItem} onClick={() => setActiveTab('communications')}>
+          <span className={styles.moreIcon}><FiMessageSquare /></span>
+          <span className={styles.moreLabel}>Messages</span>
+        </button>
+        <button className={styles.moreItem} onClick={() => setActiveTab('settings')}>
+          <span className={styles.moreIcon}><FiSettings /></span>
+          <span className={styles.moreLabel}>Settings</span>
+        </button>
+      </div>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'profile':
         return renderProfileTab();
       case 'marklist':
         return renderMarkListTab();
+      case 'reportcard':
+        return renderReportCardTab();
       case 'evalbook':
         return renderEvalBookTab();
       case 'notifications':
@@ -1824,6 +2177,8 @@ const GuardianProfile = () => {
         return renderCommunicationsTab();
       case 'settings':
         return renderSettingsTab();
+      case 'more':
+        return renderMoreTab();
       default:
         return renderProfileTab();
     }
@@ -1832,7 +2187,7 @@ const GuardianProfile = () => {
   if (isLoading) {
     return (
       <MobileProfileLayout 
-        title="Guardian Profile" 
+        title="IQRA Parent" 
         onLogout={handleLogout}
         onNotificationClick={handleNotificationClick}
         notificationCount={unreadNotificationCount}
@@ -1846,7 +2201,7 @@ const GuardianProfile = () => {
   if (error) {
     return (
       <MobileProfileLayout 
-        title="Guardian Profile" 
+        title="IQRA Parent" 
         onLogout={handleLogout}
         onNotificationClick={handleNotificationClick}
         notificationCount={unreadNotificationCount}
@@ -1865,7 +2220,7 @@ const GuardianProfile = () => {
   if (!guardianInfo || wards.length === 0) {
     return (
       <MobileProfileLayout 
-        title="Guardian Profile" 
+        title="IQRA Parent" 
         onLogout={handleLogout}
         onNotificationClick={handleNotificationClick}
         notificationCount={unreadNotificationCount}
@@ -1880,7 +2235,7 @@ const GuardianProfile = () => {
 
   return (
     <MobileProfileLayout
-      title="Guardian Profile"
+      title={guardianInfo?.guardian_name || 'IQRA Parent'}
       onLogout={handleLogout}
       onRefresh={handleRefresh}
       onNotificationClick={handleNotificationClick}
@@ -1889,6 +2244,28 @@ const GuardianProfile = () => {
       {renderContent()}
       <BottomNavigation items={navItems} activeItem={activeTab} onItemClick={setActiveTab} />
       <toast.ToastContainer />
+
+      {/* Cash Receipt Voucher modal — in-app overlay */}
+      {receiptVoucher && (
+        <div className={styles.receiptModalOverlay} onClick={closeReceiptVoucher}>
+          <div className={styles.receiptModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.receiptModalHeader}>
+              <span className={styles.receiptModalTitle}>Cash Receipt Voucher</span>
+              <div className={styles.receiptModalActions}>
+                <button className={styles.receiptPrintBtn} onClick={() => window.print()}>
+                  <FiFileText /> Print
+                </button>
+                <button className={styles.receiptCloseBtn} onClick={closeReceiptVoucher}>
+                  <FiX />
+                </button>
+              </div>
+            </div>
+            <div className={styles.receiptModalBody}>
+              <InvoiceReceipt receiptData={receiptVoucher} schoolInfo={schoolInfo} />
+            </div>
+          </div>
+        </div>
+      )}
     </MobileProfileLayout>
   );
 };

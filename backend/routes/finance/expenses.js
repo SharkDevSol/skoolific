@@ -3,6 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { authenticateWithBranch } = require('../../middleware/branchAuth');
+const { branchSafeUpload } = require('../../middleware/branchContextMiddleware');
 const multer = require('multer');
 const path = require('path');
 const { getEndpointPath, API_ENDPOINTS } = require('../../config/api.config');
@@ -223,7 +224,7 @@ router.post('/:id/approve', authenticateWithBranch, async (req, res) => {
 });
 
 // Upload attachment
-router.post('/:id/attachments', authenticateWithBranch, upload.single('file'), async (req, res) => {
+router.post('/:id/attachments', authenticateWithBranch, ...branchSafeUpload(upload.single('file')), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: { message: 'No file uploaded' } });

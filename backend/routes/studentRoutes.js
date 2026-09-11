@@ -31,6 +31,9 @@ router.use(cors({
 // Apply input sanitization
 router.use(sanitizeInputs);
 
+// Branch code gate: ALL student routes require a branch code (header, query, or body)
+router.use(validateBranchCode);
+
 // Configure multer for file uploads - support multiple file types
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'Uploads/'),
@@ -489,20 +492,37 @@ router.post('/init-global-tracker', async (req, res) => {
 
 // Add student - UPDATED WITH AUTO-TABLE CREATION AND GLOBAL ID LOGIC
 router.post('/add-student', upload.any(), async (req, res) => {
+  // Restore branch context if lost across multer
+  const { getBranchCode, setBranchCode } = require('../config/db');
+  const headerCode = req.headers['x-branch-code'];
+  if (headerCode && !getBranchCode()) {
+    setBranchCode(headerCode);
+  }
   const client = await db.connect();
   
   try {
     await client.query('BEGIN');
     
     const formData = req.body;
-    const files = req.files;
+    const files = req.files || [];
     const className = formData.class;
+    
+    // DEBUG: log what the frontend actually sent for the image
+    console.log('=== ADD-STUDENT DEBUG ===');
+    console.log('files received:', files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname, filename: f.filename, mimetype: f.mimetype, size: f.size })));
+    console.log('body.image_student:', JSON.stringify(formData.image_student));
+    console.log('=== END ADD-STUDENT DEBUG ===');
     
     if (!className) {
       throw new Error('Class name is required');
     }
+
+    // Branch code guard — fail if no branch code available for routing
+    if (!req.branchCode && !req.headers['x-branch-code']) {
+      throw new Error('Branch code is required. Student registration needs a valid branch to save to.');
+    }
     
-    // Ensure global_id_tracker table exists (auto-create if missing)
+    // Ensure global_id_tracker + global_machine_ids tables exist (auto-create if missing)
     try {
       await client.query('CREATE SCHEMA IF NOT EXISTS school_schema_points');
       
@@ -520,6 +540,21 @@ router.post('/add-student', upload.any(), async (req, res) => {
       if (parseInt(trackerCheck.rows[0].count) === 0) {
         await client.query('INSERT INTO school_schema_points.global_id_tracker (last_school_id) VALUES (0)');
       }
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS school_schema_points.global_machine_ids (
+          smachine_id VARCHAR(50) PRIMARY KEY,
+          student_name VARCHAR(255) NOT NULL,
+          class_name VARCHAR(100) NOT NULL,
+          school_id INTEGER,
+          class_id INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      try {
+        await client.query('ALTER TABLE school_schema_points.global_machine_ids ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+      } catch (e) { /* column may already exist */ }
     } catch (err) {
       console.error('Error ensuring global_id_tracker exists:', err);
       throw new Error('Failed to initialize global ID tracking system');
@@ -653,15 +688,25 @@ router.post('/add-student', upload.any(), async (req, res) => {
     
     // Validate smachine_id uniqueness across ALL classes if provided
     if (formData.smachine_id) {
-      // Check global tracker table first (most reliable)
-      const globalCheck = await client.query(
-        'SELECT student_name, class_name FROM school_schema_points.global_machine_ids WHERE smachine_id = $1',
-        [formData.smachine_id]
-      );
+      // Check global tracker table first (most reliable) - skip gracefully if table missing
+      let globalDuplicate = null;
+      try {
+        const globalCheck = await client.query(
+          'SELECT student_name, class_name FROM school_schema_points.global_machine_ids WHERE smachine_id = $1',
+          [formData.smachine_id]
+        );
+        if (globalCheck.rows.length > 0) {
+          globalDuplicate = globalCheck.rows[0];
+        }
+      } catch (e) {
+        if (e.code !== '42P01') {
+          console.warn('Global machine ID check failed (continuing with class checks):', e.message);
+        }
+      }
       
-      if (globalCheck.rows.length > 0) {
+      if (globalDuplicate) {
         throw new Error(
-          `Machine ID ${formData.smachine_id} already added. This ID is used by student "${globalCheck.rows[0].student_name}" in ${globalCheck.rows[0].class_name}.`
+          `Machine ID ${formData.smachine_id} already added. This ID is used by student "${globalDuplicate.student_name}" in ${globalDuplicate.class_name}.`
         );
       }
       
@@ -740,9 +785,23 @@ router.post('/add-student', upload.any(), async (req, res) => {
     console.log(`DEBUG: Full INSERT query = ${insertQuery}`);
     const result = await client.query(insertQuery, values);
     
+    // Verify the student was actually saved to the database
+    const verifyResult = await client.query(
+      `SELECT id FROM classes_schema."${className}" WHERE student_name = $1 AND guardian_phone = $2`,
+      [formData.student_name, formData.guardian_phone]
+    );
+    
+    if (verifyResult.rows.length === 0) {
+      throw new Error('Student registration failed - record not saved to database. Please try again.');
+    }
+    
+    console.log(`✅ Verified: Student saved with ID ${verifyResult.rows[0].id}`);
+    
     // Add to global machine ID tracker if smachine_id was provided
     if (formData.smachine_id) {
+      // Use a SAVEPOINT so a tracker failure can NEVER abort/silently roll back the whole registration
       try {
+        await client.query('SAVEPOINT machine_id_tracker');
         await client.query(`
           INSERT INTO school_schema_points.global_machine_ids 
           (smachine_id, student_name, class_name, school_id, class_id)
@@ -754,14 +813,228 @@ router.post('/add-student', upload.any(), async (req, res) => {
               class_id = EXCLUDED.class_id,
               updated_at = CURRENT_TIMESTAMP
         `, [formData.smachine_id, formData.student_name, className, newSchoolId, newClassId]);
+        await client.query('RELEASE SAVEPOINT machine_id_tracker');
       } catch (err) {
-        // Tracker table might not exist yet, that's okay
+        // Tracker table might not exist yet, that's okay — roll back only the tracker insert
+        try { await client.query('ROLLBACK TO SAVEPOINT machine_id_tracker'); } catch (e) { /* ignore */ }
         console.log('Note: Global machine ID tracker not available:', err.message);
       }
     }
     
     await client.query('COMMIT');
     
+    // ---- Auto-generate monthly invoices for new student ----
+    try {
+      const { getBranchPrisma } = require('../services/BranchPrismaService');
+      const prisma = getBranchPrisma();
+      
+      // Build student UUID: 00000000-0000-0000-{schoolId}-{classId}
+      const schoolIdPadded = String(newSchoolId).padStart(4, '0');
+      const classIdPadded = String(newClassId).padStart(12, '0');
+      const studentUuid = `00000000-0000-0000-${schoolIdPadded}-${classIdPadded}`;
+      
+      // Find active fee structures for this class
+      const feeStructures = await prisma.feeStructure.findMany({
+        where: { gradeLevel: className, isActive: true },
+        include: { items: true }
+      });
+      
+      if (feeStructures.length === 0) {
+        console.warn(`⚠️ No active fee structure found for class "${className}" — no invoices generated. Check Payment Settings gradeLevel matches class name exactly.`);
+      }
+      
+      if (feeStructures.length > 0) {
+        console.log(`📋 Found ${feeStructures.length} fee structure(s) for class "${className}" — generating invoices for new student...`);
+        
+        const ethiopianMonthNames = [
+          'Meskerem', 'Tikimt', 'Hidar', 'Tahsas', 'Tir', 'Yekatit',
+          'Megabit', 'Miazia', 'Ginbot', 'Sene', 'Hamle', 'Nehase', 'Pagume'
+        ];
+        
+        for (const feeStructure of feeStructures) {
+          // Parse months data from description
+          let selectedMonths = [];
+          let oldRegistrationFee = 0;
+          let newRegistrationFee = 0;
+          try {
+            let desc = feeStructure.description || '{}';
+            desc = desc.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+            const monthsData = JSON.parse(desc);
+            selectedMonths = monthsData.months || [];
+            oldRegistrationFee = parseFloat(monthsData.oldRegistrationFee) || 0;
+            newRegistrationFee = parseFloat(monthsData.newRegistrationFee) || parseFloat(monthsData.registrationFee) || 0;
+          } catch (e) {
+            console.warn(`⚠️ Could not parse months data for fee structure ${feeStructure.id}:`, e.message);
+          }
+          
+          if (selectedMonths.length === 0) {
+            console.log(`⏭️ Fee structure ${feeStructure.id} has no months configured — skipping`);
+            continue;
+          }
+          
+          selectedMonths.sort((a, b) => a - b);
+          
+          // Use the Ethiopian calendar utility for ACCURATE dates
+          // (handles leap years, Pagume days, and month boundaries correctly)
+          const { toEthiopian, toGregorian } = require('../utils/ethiopianCalendar');
+          
+          const today = new Date();
+          const ethNow = toEthiopian(today);
+          const ethiopianYear = ethNow.year;
+          
+          // Generate invoices for ALL months configured in payment settings
+          console.log(`📅 Generating invoices for ALL configured months: ${selectedMonths.join(', ')}`);
+          
+          // Get monthly amount from first fee structure item
+          const monthlyAmount = feeStructure.items.length > 0 ? parseFloat(feeStructure.items[0].amount) : 0;
+          if (monthlyAmount <= 0) continue;
+          
+          const academicYearId = feeStructure.academicYearId || '00000000-0000-0000-0000-000000000001';
+          const campusId = feeStructure.campusId || '00000000-0000-0000-0000-000000000001';
+          const accountId = feeStructure.items[0]?.accountId || '00000000-0000-0000-0000-000000000001';
+          
+          // Pagume (month 13) has 5 days in a normal year, 6 in a leap year
+          const gregYear = ethiopianYear + 7;
+          const pagumeDays = ((gregYear + 1) % 4 === 0 && ((gregYear + 1) % 100 !== 0 || (gregYear + 1) % 400 === 0)) ? 6 : 5;
+          
+          for (let monthIndex = 0; monthIndex < selectedMonths.length; monthIndex++) {
+            const targetMonth = selectedMonths[monthIndex];
+            const isFirstMonth = monthIndex === 0;
+            const monthName = ethiopianMonthNames[targetMonth - 1] || `Month ${targetMonth}`;
+
+            // DUPLICATE GUARD: never create a second invoice for the same student + month
+            const existingInvoices = await prisma.invoice.findMany({
+              where: { studentId: studentUuid },
+              select: { metadata: true }
+            });
+            const alreadyHasMonth = existingInvoices.some(inv => inv.metadata && inv.metadata.monthNumber === targetMonth);
+            if (alreadyHasMonth) {
+              console.log(`⏭️ Invoice for month ${targetMonth} already exists for ${studentUuid} — skipping (duplicate guard)`);
+              continue;
+            }
+            
+            // FIX: Due date = LAST day of the target Ethiopian month (accurate).
+            // Months 1-12 have 30 days; Pagume (13) has 5-6 days.
+            const lastDayOfMonth = targetMonth === 13 ? pagumeDays : 30;
+            let dueDate = toGregorian(ethiopianYear, targetMonth, lastDayOfMonth);
+            // Normalize to NOON local time so the date displays correctly in any timezone
+            dueDate.setHours(12, 0, 0, 0);
+            if (dueDate < today) {
+              dueDate = new Date(today);
+              dueDate.setHours(12, 0, 0, 0);
+              dueDate.setDate(dueDate.getDate() + 10);
+            }
+            
+            // Calculate amount with registration fee for first month only
+            // Fee type: OLD students pay the old registration fee, NEW students pay the new one
+            const studentFeeType = (formData.old_or_new && String(formData.old_or_new).toLowerCase() === 'old') ? 'old' : 'new';
+            const chosenRegFee = (studentFeeType === 'old' && oldRegistrationFee > 0)
+              ? oldRegistrationFee
+              : newRegistrationFee;
+            const registrationFee = isFirstMonth ? chosenRegFee : 0;
+            const invoiceAmount = monthlyAmount + registrationFee;
+            
+            // Build invoice items
+            const invoiceItems = [
+              {
+                description: `${monthName} Monthly Fee (Month ${monthIndex + 1} of ${selectedMonths.length})`,
+                feeCategory: 'TUITION',
+                amount: monthlyAmount,
+                accountId: accountId
+              }
+            ];
+            
+            if (isFirstMonth && registrationFee > 0) {
+              invoiceItems.push({
+                description: `Registration Fee (${studentFeeType === 'old' ? 'Old' : 'New'} Student)`,
+                feeCategory: 'TUITION',
+                amount: registrationFee,
+                accountId: accountId
+              });
+            }
+            
+            // Create the invoice
+            const invoiceNumber = `INV-${Date.now()}-${studentUuid.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}-M${monthIndex + 1}`;
+            
+            // Generate unique 10-digit invoice reference code
+            const { generateUniqueInvoiceRefCode } = require('../utils/invoiceRefCode');
+            const invoiceRefCode = await generateUniqueInvoiceRefCode(async (code) => {
+              const existing = await prisma.invoice.findUnique({ where: { invoiceRefCode: code } });
+              return !!existing;
+            });
+
+            await prisma.invoice.create({
+              data: {
+                invoiceNumber,
+                invoiceRefCode,
+                studentId: studentUuid,
+                academicYearId,
+                feeStructureId: feeStructure.id,
+                issueDate: new Date(),
+                dueDate,
+                totalAmount: invoiceAmount,
+                discountAmount: 0,
+                lateFeeAmount: 0,
+                netAmount: invoiceAmount,
+                paidAmount: 0,
+                status: 'ISSUED',
+                campusId,
+                createdBy: '00000000-0000-0000-0000-000000000001',
+                  metadata: {
+                    month: monthName,
+                    monthNumber: targetMonth,
+                    monthIndex: monthIndex + 1,
+                    totalMonths: selectedMonths.length,
+                    oldRegistrationFee: isFirstMonth ? oldRegistrationFee : 0,
+                    newRegistrationFee: isFirstMonth ? newRegistrationFee : 0,
+                    studentType: isFirstMonth ? studentFeeType : null,
+                    isAutoGenerated: true,
+                    registrationFee
+                  },
+                items: { create: invoiceItems }
+              }
+            });
+          }
+          
+          console.log(`✅ Generated ${selectedMonths.length} invoices for new student in "${className}" (fee structure: ${feeStructure.name})`);
+        }
+      }
+      
+      // Do NOT disconnect shared branch Prisma client
+    } catch (autoInvoiceErr) {
+      console.error('⚠️ Auto-invoice generation failed (non-blocking):', autoInvoiceErr.message);
+      console.error(autoInvoiceErr.stack);
+    }
+    
+    // ---- Send welcome SMS (branch-specific templates) ----
+    if (formData.guardian_phone && studentUsername) {
+      try {
+        const { sendSMS } = require('../services/SMSService');
+        const { getRenderedTemplate } = require('./smsRoutes');
+        const vars = {
+          student_name: formData.student_name || '',
+          student_username: studentUsername || '',
+          student_password: studentPassword || '',
+          guardian_name: guardianName || 'Guardian',
+          guardian_username: guardianUsername || '',
+          guardian_password: guardianPassword || '',
+          school_name: 'IQRA ACADEMY',
+          guardian_app_link: 'https://iqra.skoolific.com/app/guardian-login',
+          branch_code: req.branchCode || ''
+        };
+        const guardianMsg = await getRenderedTemplate('guardian_welcome', vars);
+        if (guardianUsername && guardianMsg) {
+          sendSMS(formData.guardian_phone, guardianMsg, null, {
+            templateKey: 'guardian_welcome',
+            recipientName: guardianName || 'Guardian'
+          }).catch(e => console.warn('Guardian SMS failed:', e.message));
+        }
+        // NOTE: student_welcome SMS is intentionally DISABLED (only guardian SMS is sent).
+      } catch (smsErr) {
+        console.warn('Could not send welcome SMS:', smsErr.message);
+      }
+    }
+
     res.json({
       message: 'Student added successfully',
       student_username: studentUsername,
@@ -782,14 +1055,46 @@ router.post('/add-student', upload.any(), async (req, res) => {
     await client.query('ROLLBACK');
     console.error('Error inserting student:', err);
     
-    if (err.code === '23505' && err.constraint && err.constraint.includes('guardian_username')) {
+    if (err.message.includes('not saved to database')) {
       return res.status(500).json({ 
-        error: 'Database constraint violation. Please run the fix constraints endpoint or recreate the form structure.',
-        details: 'Guardian username unique constraint still exists in the database'
+        error: 'Registration failed',
+        message: err.message
       });
     }
     
-    res.status(500).json({ error: 'Failed to add student', details: err.message });
+    if (err.code === '23505') {
+      // Unique constraint violation
+      if (err.constraint && err.constraint.includes('guardian_username')) {
+        return res.status(400).json({ 
+          error: 'Duplicate guardian',
+          message: 'A guardian with this username already exists. Please use a different guardian name or phone number.'
+        });
+      }
+      if (err.constraint && err.constraint.includes('smachine_id')) {
+        return res.status(400).json({ 
+          error: 'Duplicate machine ID',
+          message: 'This machine ID is already registered to another student.'
+        });
+      }
+      return res.status(400).json({ 
+        error: 'Duplicate entry',
+        message: 'A student with this information already exists.'
+      });
+    }
+    
+    if (err.code === '42P01') {
+      // Table doesn't exist
+      return res.status(400).json({ 
+        error: 'Class not found',
+        message: `The class "${err.detail || 'unknown'}" does not exist. Please create the class first.`
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Registration failed',
+      message: 'An unexpected error occurred. Please try again.',
+      details: err.message 
+    });
   } finally {
     client.release();
   }

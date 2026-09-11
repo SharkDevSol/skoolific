@@ -48,11 +48,11 @@ const TeacherCommunications = ({ user }) => {
     const fetchData = async () => {
       try {
         console.log('Fetching contacts for teacher:', staffId);
-        const contactsRes = await axios.get(`https://v2.skoolific.com/api/chats/contacts/teacher/${staffId}`);
+        const contactsRes = await axios.get(`/api/chats/contacts/teacher/${staffId}`);
         dispatch(setContacts({ role: 'teacher', contacts: contactsRes.data }));
 
         console.log('Fetching messages for teacher:', teacherId);
-        const requestsRes = await axios.get(`https://v2.skoolific.com/api/chats/user/${teacherId}`);
+        const requestsRes = await axios.get(`/api/chats/user/${teacherId}`);
         console.log('Received messages:', requestsRes.data.length);
         requestsRes.data.forEach((request) => {
           const otherUserId = request.sender_id === teacherId ? request.recipient_id : request.sender_id;
@@ -68,7 +68,7 @@ const TeacherCommunications = ({ user }) => {
     fetchData();
 
     console.log('Joining socket room:', teacherId);
-    socket.current = io('https://v2.skoolific.com');
+    socket.current = io('');
     socket.current.emit('join', teacherId);
 
     socket.current.on('new_request', (request) => {
@@ -115,7 +115,7 @@ const TeacherCommunications = ({ user }) => {
     
     setSending(true);
     try {
-      const response = await axios.post('https://v2.skoolific.com/api/chats/requests', {
+      const response = await axios.post('/api/chats/requests', {
         senderId: teacherId,
         recipientId: activeChatId,
         questions: [messageInput.trim()]
@@ -162,7 +162,7 @@ const TeacherCommunications = ({ user }) => {
     
     setSending(true);
     try {
-      const response = await axios.post('https://v2.skoolific.com/api/chats/requests', {
+      const response = await axios.post('/api/chats/requests', {
         senderId: teacherId,
         recipientId: activeChatId,
         questions: newRequestData.questions.filter(q => q.trim())
@@ -183,12 +183,12 @@ const TeacherCommunications = ({ user }) => {
     if (answers.every(a => !a.trim())) return;
 
     try {
-      await axios.post(`https://v2.skoolific.com/api/chats/requests/${requestId}/respond`, {
+      await axios.post(`/api/chats/requests/${requestId}/respond`, {
         responses: answers.map(answer => ({ answer, timestamp: new Date().toISOString() }))
       });
       setResponseText({});
       
-      const requestsRes = await axios.get(`https://v2.skoolific.com/api/chats/user/${teacherId}`);
+      const requestsRes = await axios.get(`/api/chats/user/${teacherId}`);
       requestsRes.data.forEach(request => {
         const otherUserId = request.sender_id === teacherId ? request.recipient_id : request.sender_id;
         dispatch(addRequest({ userId: otherUserId, request }));

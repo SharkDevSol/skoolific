@@ -3,7 +3,7 @@ import axios from 'axios';
 import styles from '../Finance/PaymentManagement.module.css';
 import { getCurrentEthiopianMonth } from '../../utils/ethiopianCalendar';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const PayrollSystem = () => {
   const [payrollData, setPayrollData] = useState(null);

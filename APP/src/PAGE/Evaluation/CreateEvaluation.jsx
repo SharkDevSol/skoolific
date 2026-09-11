@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { FiSave, FiX, FiPlus, FiTrash2, FiAlertCircle, FiClipboard, FiUsers, FiUser, FiBook, FiCalendar } from 'react-icons/fi';
 import styles from './CreateEvaluation.module.css'; // We will create this CSS file next
 
-const API_BASE = 'https://v2.skoolific.com/api/evaluations';
+const API_BASE = '/api/evaluations';
 
 const CreateEvaluation = ({ evaluationId, onEvaluationCreated, onCancel } ) => {
   const [formData, setFormData] = useState({

@@ -13,106 +13,106 @@ const InvoiceReceipt = React.forwardRef(({ receiptData, schoolInfo }, ref) => {
     amountInFigures,
     paymentMethod,
     cashierName,
-    invoiceNumber
+    invoiceNumber,
+    invoiceRefCode
   } = receiptData;
 
+  const purpose = monthsPaid && monthsPaid.length > 0
+    ? `Monthly Tuition Fee - ${monthsPaid.join(', ')}`
+    : 'Monthly Tuition Fee';
+
+  const displayInvoiceId = invoiceRefCode || '—';
+
   return (
-    <div ref={ref} className={styles.receipt}>
-      {/* Header with Logo and School Info */}
-      <div className={styles.header}>
-        <div className={styles.logoSection}>
-          {schoolInfo?.logo && (
-            <img src={schoolInfo.logo} alt="School Logo" className={styles.logo} />
-          )}
-        </div>
-        <div className={styles.schoolInfo}>
-          <h2 className={styles.schoolNameEn}>{schoolInfo?.nameEn || 'Dugsiga Barbaarinta Caruurta, Hoose, Dhexe & Sare Ee Iqra'}</h2>
-          <h3 className={styles.schoolNameAm}>{schoolInfo?.nameAm || 'ኢቅራ ሮጸ አሕፃናት አንደኛና ሁለተኛ ደረጃ ት/ቤት'}</h3>
-          <p className={styles.schoolNameEn2}>Iqra Kindergarten, Primary, Intermediate and Secondary School</p>
-          <p className={styles.schoolNameAr}>اقرأ روضة الأطفال ومدرسة الإبتدائية والمتوسطة والثانويه</p>
-          <p className={styles.contact}>0911775841 | Jigiga-Ethiopia</p>
-        </div>
-      </div>
+    <div ref={ref} className={`${styles.voucher} receipt`}>
+      <div className={styles.perforation} aria-hidden="true"></div>
+      <div className={styles.voucherInner}>
 
-      {/* Receipt Title and Number */}
-      <div className={styles.titleSection}>
-        <div className={styles.titleRow}>
-          <div className={styles.titleLeft}>
-            <p className={styles.receiptLabel}>የገንዘብ መቀበያ ደረሰኝ</p>
-            <h1 className={styles.receiptTitle}>Cash Receipt Voucher</h1>
+        <header className={styles.head}>
+          <div className={styles.brand}>
+            <div className={styles.badgeWrap}>
+              <div className={styles.badge}>
+                {schoolInfo?.logo ? (
+                  <img src={schoolInfo.logo} alt="Iqra Academy" className={styles.badgeImg} />
+                ) : (
+                  <span className={styles.badgeText}>IQRA</span>
+                )}
+              </div>
+            </div>
+            <div className={styles.wordmark}>
+              <span className={styles.iqra}>IQRA</span>
+              <span className={styles.academy}>Academy</span>
+            </div>
           </div>
-          <div className={styles.receiptNumberBox}>
-            <p className={styles.dateLabel}>Date</p>
-            <p className={styles.receiptNumber}>{receiptNumber}</p>
-            <p className={styles.date}>{date}</p>
-          </div>
-        </div>
-      </div>
 
-      {/* Receipt Body */}
-      <div className={styles.body}>
-        {/* From */}
-        <div className={styles.field}>
-          <label className={styles.labelAm}>ከ</label>
-          <label className={styles.labelEn}>From</label>
-          <div className={styles.value}>
-            <p className={styles.studentInfo}>{studentName}</p>
-            <p className={styles.studentDetails}>Student ID: {studentId} | Class: {className}</p>
+          <div className={styles.identity}>
+            <p className={styles.so}>Dugsiga Barbaarinta Caruurta, Hoose, Dhexe &amp; Sare Ee Iqra</p>
+            <p className={styles.am}>ኢቅራ አፀደሕፃናት አንደኛና ሁለተኛ ደረጃ ት/ቤት</p>
+            <p className={styles.enName}>Iqra Kindergarten, Primary, Intermediate and Secondary School</p>
+            <p className={styles.ar} dir="rtl">اقرأ روضة الأطفال ومدرسة الإبتدائية والمتوسطة والثانويه</p>
+            <p className={styles.contact}>Jigjiga, Ethiopia &nbsp;·&nbsp; Invoice ID: <strong>{displayInvoiceId}</strong></p>
           </div>
-        </div>
 
-        {/* Purpose of Payment */}
-        <div className={styles.field}>
-          <label className={styles.labelAm}>የተከፈለበት ምክንያት</label>
-          <label className={styles.labelEn}>Purpose of Payment</label>
-          <div className={styles.value}>
-            <p className={styles.purpose}>Monthly Tuition Fee - {monthsPaid.join(', ')}</p>
-            <p className={styles.invoiceRef}>Invoice: {invoiceNumber}</p>
+          <div className={styles.titleBlock}>
+            <span className={styles.titleAm}>የገንዘብ መቀበያ ደረሰኝ</span>
+            <span className={styles.titleEn}>Cash Receipt Voucher</span>
+            <div className={styles.meta}>
+              <div className={styles.metaItem}>
+                <span className={styles.metaLabel}>Date</span>
+                <span className={styles.metaFill}>{date}</span>
+              </div>
+              <div className={styles.metaItem}>
+                <span className={styles.metaLabel}>No.</span>
+                <span className={styles.stampNo}>{receiptNumber}</span>
+              </div>
+            </div>
           </div>
-        </div>
+        </header>
 
-        {/* Amount in Word */}
-        <div className={styles.field}>
-          <label className={styles.labelAm}>በአንዘበ</label>
-          <label className={styles.labelEn}>Amount in Word</label>
-          <div className={styles.value}>
-            <p className={styles.amountWord}>{amountInWords}</p>
+        <div className={styles.rule}></div>
+
+        <div className={styles.bodyGrid}>
+          <div className={styles.col}>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}><span className={styles.labelAm}>ከ</span><span className={styles.labelEn}>From</span></label>
+              <div className={styles.fill}>
+                <span className={styles.fillStrong}>{studentName}</span>
+                <span className={styles.fillSub}>Student ID: {studentId} | Class: {className}</span>
+              </div>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}><span className={styles.labelAm}>የተከፈለበት ምክንያት</span><span className={styles.labelEn}>Purpose of Payment</span></label>
+              <div className={styles.fill}>{purpose}</div>
+              <div className={`${styles.fill} ${styles.secondary}`}>Invoice: {invoiceNumber}</div>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}><span className={styles.labelAm}>ቀሪ ክፍያ</span><span className={styles.labelEn}>Payment Method</span></label>
+              <div className={styles.fill}>{paymentMethod}</div>
+            </div>
           </div>
-        </div>
 
-        {/* Payment in Figures */}
-        <div className={styles.field}>
-          <label className={styles.labelAm}>በፊደል</label>
-          <label className={styles.labelEn}>Payment in Figures</label>
-          <div className={styles.valueBox}>
-            <p className={styles.amountFigure}>{amountInFigures} Birr</p>
-          </div>
-        </div>
+          <div className={styles.col}>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}><span className={styles.labelAm}>በአጻዘ</span><span className={styles.labelEn}>Amount in Words</span></label>
+              <div className={styles.fill}>{amountInWords}</div>
+            </div>
 
-        {/* Payment Method */}
-        <div className={styles.field}>
-          <label className={styles.labelAm}>የክፍያ ዘዴ</label>
-          <label className={styles.labelEn}>Payment Method</label>
-          <div className={styles.value}>
-            <p className={styles.paymentMethod}>{paymentMethod}</p>
-          </div>
-        </div>
-      </div>
+            <div className={`${styles.field} ${styles.figure}`}>
+              <label className={styles.fieldLabel}><span className={styles.labelAm}>በፊደል</span><span className={styles.labelEn}>Payment in Figures</span></label>
+              <div className={styles.figureBox}>{amountInFigures} Birr</div>
+            </div>
 
-      {/* Footer - Cashier Signature */}
-      <div className={styles.footer}>
-        <div className={styles.signatureSection}>
-          <p className={styles.signatureLabel}>የገንዘብ ተቀባይ ስም፣ ፊርማ</p>
-          <p className={styles.signatureLabelEn}>Cashier's Name & Sign</p>
-          <div className={styles.signatureLine}>
-            <p className={styles.cashierName}>{cashierName}</p>
+            <div className={`${styles.field} ${styles.signBlock}`}>
+              <div className={styles.fill}>{cashierName}</div>
+              <label className={styles.fieldLabel}><span className={styles.labelAm}>የገንዘብ ተቀባይ ስምና ፊርማ</span><span className={styles.labelEn}>Cashier's Name &amp; Sign</span></label>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Print Info */}
-      <div className={styles.printInfo}>
-        <p>Printed on: {new Date().toLocaleString()}</p>
+        <div className={styles.finePrint}>Iqra Academy &nbsp;•&nbsp; Jigjiga, Ethiopia &nbsp;•&nbsp; Invoice ID: {displayInvoiceId}</div>
+
       </div>
     </div>
   );

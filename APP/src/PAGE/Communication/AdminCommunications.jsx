@@ -56,12 +56,12 @@ const AdminCommunications = ({ adminInfo }) => {
         console.log('Admin ID:', adminId);
         
         // Fetch all guardians for admin
-        const contactsRes = await axios.get('https://v2.skoolific.com/api/chats/contacts/admin');
+        const contactsRes = await axios.get('/api/chats/contacts/admin');
         console.log('Admin contacts:', contactsRes.data?.map(c => ({ id: c.id, name: c.name, role: c.role })));
         dispatch(setContacts({ role: 'admin', contacts: contactsRes.data || [] }));
 
         // Fetch existing messages
-        const requestsRes = await axios.get(`https://v2.skoolific.com/api/chats/user/${adminId}`);
+        const requestsRes = await axios.get(`/api/chats/user/${adminId}`);
         console.log('Admin messages:', requestsRes.data?.length);
         requestsRes.data.forEach((request) => {
           const otherUserId = request.sender_id === adminId ? request.recipient_id : request.sender_id;
@@ -71,7 +71,7 @@ const AdminCommunications = ({ adminInfo }) => {
         console.error('Error fetching data:', err);
         // Fallback to general contacts
         try {
-          const fallbackRes = await axios.get('https://v2.skoolific.com/api/chats/contacts');
+          const fallbackRes = await axios.get('/api/chats/contacts');
           const guardians = fallbackRes.data?.filter(c => c.role === 'guardian') || [];
           dispatch(setContacts({ role: 'admin', contacts: guardians }));
         } catch (fallbackErr) {
@@ -86,7 +86,7 @@ const AdminCommunications = ({ adminInfo }) => {
 
     // Setup socket connection
     console.log('Admin joining socket room:', adminId);
-    socket.current = io('https://v2.skoolific.com');
+    socket.current = io('');
     socket.current.emit('join', adminId);
 
     socket.current.on('new_request', (request) => {
@@ -134,7 +134,7 @@ const AdminCommunications = ({ adminInfo }) => {
     
     setSending(true);
     try {
-      const response = await axios.post('https://v2.skoolific.com/api/chats/requests', {
+      const response = await axios.post('/api/chats/requests', {
         senderId: adminId,
         recipientId: activeChatId,
         questions: [messageInput.trim()]
@@ -184,7 +184,7 @@ const AdminCommunications = ({ adminInfo }) => {
     
     setSending(true);
     try {
-      const response = await axios.post('https://v2.skoolific.com/api/chats/requests', {
+      const response = await axios.post('/api/chats/requests', {
         senderId: adminId,
         recipientId: activeChatId,
         questions: newRequestData.questions.filter(q => q.trim())

@@ -1005,7 +1005,7 @@ router.get('/teachers-with-worktime', async (req, res) => {
     
     if (result.rows.length === 0) {
       // Fallback: query all staff_* schemas for teachers
-      const schemas = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff'];
+      const schemas = ['staff_teachers', 'staff_administrative_staff', 'staff_supportive_staff', 'staff_finance'];
       for (const schema of schemas) {
         try {
           const tables = await pool.query(

@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { getEndpointPath } = require('../config/api.config');
+const { branchSafeUpload } = require('../middleware/branchContextMiddleware');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -414,7 +415,7 @@ router.put(getEndpointPath('SETTINGS.BRANDING').replace('/api/settings', ''), au
 });
 
 // Upload branding icon (protected - admin and sub-accounts with settings permission)
-router.post(getEndpointPath('SETTINGS.BRANDING').replace('/api/settings', '') + '/icon', authenticateWithBranch, authorizeRoles('admin', 'sub-account'), uploadLimiter, upload.single('icon'), fileValidator, async (req, res) => {
+router.post(getEndpointPath('SETTINGS.BRANDING').replace('/api/settings', '') + '/icon', authenticateWithBranch, authorizeRoles('admin', 'sub-account'), uploadLimiter, ...branchSafeUpload(upload.single('icon')), fileValidator, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -451,7 +452,7 @@ router.post(getEndpointPath('SETTINGS.BRANDING').replace('/api/settings', '') + 
 });
 
 // Upload school logo (protected - admin and sub-accounts with settings permission)
-router.post(getEndpointPath('SETTINGS.BRANDING').replace('/api/settings', '') + '/logo', authenticateWithBranch, authorizeRoles('admin', 'sub-account'), uploadLimiter, upload.single('logo'), fileValidator, async (req, res) => {
+router.post(getEndpointPath('SETTINGS.BRANDING').replace('/api/settings', '') + '/logo', authenticateWithBranch, authorizeRoles('admin', 'sub-account'), uploadLimiter, ...branchSafeUpload(upload.single('logo')), fileValidator, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });

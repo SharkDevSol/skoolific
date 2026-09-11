@@ -4,6 +4,7 @@ const machineSyncService = require('../services/machineSyncService');
 const aasImportService = require('../services/aasImportService');
 const aasRealtimeSync = require('../services/aasRealtimeSync');
 const { authenticateWithBranch, validateBranchCode } = require('../middleware/branchAuth');
+const { branchSafeUpload } = require('../middleware/branchContextMiddleware');
 const pool = require('../config/db');
 const multer = require('multer');
 const path = require('path');
@@ -192,7 +193,7 @@ router.get('/user-mappings', authenticateWithBranch, async (req, res) => {
 });
 
 // Import attendance from AAS 6.0 CSV export
-router.post('/import-csv', authenticateWithBranch, upload.single('csvFile'), async (req, res) => {
+router.post('/import-csv', authenticateWithBranch, ...branchSafeUpload(upload.single('csvFile')), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No CSV file uploaded' });

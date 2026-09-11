@@ -149,7 +149,7 @@ The tests will automatically use credentials from `backend/.env`:
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
-DB_PASSWORD=12345678
+DB_PASSWORD=[REDACTED-PASSWORD]
 DB_NAME=skoolific
 ```
 

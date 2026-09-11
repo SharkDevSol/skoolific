@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaChalkboardTeacher, FaUserGraduate, FaUserShield, FaHeart } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://v2.skoolific.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
 
 const Post = () => {
   const { t: appT } = useApp();

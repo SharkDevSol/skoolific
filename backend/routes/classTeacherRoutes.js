@@ -769,6 +769,27 @@ router.put('/weekly-attendance/:className/:weekStart', async (req, res) => {
           'Marked by class teacher',
           1
         ]);
+
+        // ---- Push to guardian for absent/late (non-blocking) ----
+        if (fullStatus === 'absent' || fullStatus === 'late' && studentName) {
+          try {
+            const g = await client.query(
+              `SELECT guardian_username, guardian_name FROM classes_schema."${className}" WHERE school_id = $1 LIMIT 1`,
+              [school_id]
+            );
+            const guardianUsername = g.rows[0]?.guardian_username;
+            if (guardianUsername) {
+              const { notifyGuardianPush } = require('../services/guardianPush');
+              notifyGuardianPush(guardianUsername,
+                fullStatus === 'absent' ? '⚠️ Absent Today' : '⏰ Late Today',
+                `${studentName} was marked ${fullStatus} on ${ethDate.month}/${ethDate.day}/${ethDate.year}.`,
+                { type: 'attendance', student_name: studentName, status: fullStatus }
+              ).catch(() => {});
+            }
+          } catch (pushErr) {
+            console.warn('Attendance push failed (non-blocking):', pushErr.message);
+          }
+        }
       }
     }
 

@@ -5,7 +5,7 @@ import { FiSave, FiX, FiArrowLeft } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import AccountSelector from './AccountSelector';
 
-const API_BASE = `${import.meta.env.VITE_API_URL || '/api'}/finance/accounts`;
+const API_BASE = `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/finance/accounts`;
 
 const AccountForm = () => {
   const navigate = useNavigate();

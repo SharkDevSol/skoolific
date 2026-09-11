@@ -12,7 +12,7 @@ const ProfileHeader = ({
   const { theme } = useApp();
   
   const headerStyle = {
-    background: `linear-gradient(135deg, ${theme?.primaryColor || '#e67e22'} 0%, ${theme?.secondaryColor || '#d35400'} 100%)`
+    background: `linear-gradient(135deg, ${theme?.primaryColor || '#7c3aed'} 0%, ${theme?.secondaryColor || '#8b5cf6'} 100%)`
   };
   const getInitial = () => {
     if (fallbackInitial) return fallbackInitial;

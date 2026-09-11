@@ -21,7 +21,7 @@ const GuardianAttendance = () => {
     try {
       const guardianInfo = JSON.parse(localStorage.getItem('guardianInfo') || '{}');
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL || '/api'}/guardian-attendance/guardian-attendance/${guardianInfo.guardian_username}`,
+        `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/guardian-attendance/guardian-attendance/${guardianInfo.guardian_username}`,
         {
           params: {
             year: selectedYear,

@@ -65,6 +65,9 @@ router.get("/guardians", authenticateWithBranch, async (req, res) => {
             guardian_username,
             guardian_password,
             student_name,
+            school_id,
+            class_id,
+            image_student,
             age,
             gender
           FROM classes_schema."${className}"

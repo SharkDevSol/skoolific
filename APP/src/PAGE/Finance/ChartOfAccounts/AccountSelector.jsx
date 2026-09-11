@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import styles from './AccountSelector.module.css';
 
-const API_BASE = `${import.meta.env.VITE_API_URL || '/api'}/finance/accounts`;
+const API_BASE = `${(typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'))}/finance/accounts`;
 
 const AccountSelector = ({ value, onChange, excludeId, type, disabled = false }) => {
   const [accounts, setAccounts] = useState([]);

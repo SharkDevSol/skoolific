@@ -71,6 +71,9 @@ async function processMachineData(data, headers, query) {
         UNION
         SELECT machine_id, full_name, global_staff_id, 'Supportive Staff' as staff_type
         FROM staff_supportive_staff WHERE machine_id IS NOT NULL
+        UNION
+        SELECT machine_id, full_name, global_staff_id, 'Finance' as staff_type
+        FROM staff_finance WHERE machine_id IS NOT NULL
         ORDER BY machine_id
       `);
       

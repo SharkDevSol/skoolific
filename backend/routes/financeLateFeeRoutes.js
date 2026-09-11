@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
 const { getEndpointPath, API_ENDPOINTS } = require('../config/api.config');
-const prisma = new PrismaClient();
+const { branchPrisma: prisma } = require('../services/BranchPrismaService');
 
 // Security middleware
 const { authenticateWithBranch, validateBranchCode } = require('../middleware/branchAuth');
@@ -300,8 +299,9 @@ router.put('/:id', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS
         }
       });
 
-      // Ethiopian New Year (Meskerem 1, 2018) = September 11, 2025
-      const ethiopianNewYear = new Date(2025, 8, 11);
+      // FIX: use the accurate Ethiopian calendar utility (no hardcoded dates)
+      const { toEthiopian, toGregorian } = require('../utils/ethiopianCalendar');
+      const ethNow = toEthiopian(new Date());
       
       let updatedCount = 0;
       for (const invoice of allInvoices) {
@@ -311,9 +311,9 @@ router.put('/:id', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS
         if (!monthNumber) continue;
         
         // Calculate new due date: Month start + shortest grace period
-        const daysFromNewYear = (monthNumber - 1) * 30;
-        const monthStartDate = new Date(ethiopianNewYear);
-        monthStartDate.setDate(monthStartDate.getDate() + daysFromNewYear);
+        const monthStartDate = toGregorian(ethNow.year, monthNumber, 1);
+        // Normalize to NOON local time so the date displays correctly in any timezone
+        monthStartDate.setHours(12, 0, 0, 0);
         
         const newDueDate = new Date(monthStartDate);
         newDueDate.setDate(newDueDate.getDate() + shortestGracePeriod);
@@ -379,8 +379,9 @@ router.put('/:id', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS
           }
         });
 
-        // Ethiopian New Year (Meskerem 1, 2018) = September 11, 2025
-        const ethiopianNewYear = new Date(2025, 8, 11);
+        // FIX: use the accurate Ethiopian calendar utility (no hardcoded dates)
+        const { toEthiopian, toGregorian } = require('../utils/ethiopianCalendar');
+        const ethNow = toEthiopian(new Date());
         
         let updatedCount = 0;
         for (const invoice of allInvoices) {
@@ -390,9 +391,9 @@ router.put('/:id', authenticateWithBranch, requirePermission(FINANCE_PERMISSIONS
           if (!monthNumber) continue;
           
           // Calculate new due date: Month start + shortest grace period
-          const daysFromNewYear = (monthNumber - 1) * 30;
-          const monthStartDate = new Date(ethiopianNewYear);
-          monthStartDate.setDate(monthStartDate.getDate() + daysFromNewYear);
+          const monthStartDate = toGregorian(ethNow.year, monthNumber, 1);
+          // Normalize to NOON local time so the date displays correctly in any timezone
+          monthStartDate.setHours(12, 0, 0, 0);
           
           const newDueDate = new Date(monthStartDate);
           newDueDate.setDate(newDueDate.getDate() + shortestGracePeriod);

@@ -12,7 +12,7 @@ Your browser is caching the old JavaScript file. I've fixed the code and added c
 2. Connect with these details:
    - Host: `76.13.48.245`
    - Username: `root`
-   - Password: `V@gSWi)Po712@TaWR3r9`
+   - Password: `[REDACTED-PASSWORD]`
 3. Navigate to: `/var/www/skoolific/iqrab3/APP/dist/`
 4. Drag and drop `APP/dist/index.html` from your local folder to the server
 5. Click "Yes" to overwrite
@@ -21,7 +21,7 @@ Your browser is caching the old JavaScript file. I've fixed the code and added c
 1. Open PowerShell or Command Prompt
 2. Run this command (it will ask for confirmation - type `y` and press Enter):
    ```
-   pscp -pw "V@gSWi)Po712@TaWR3r9" APP\dist\index.html root@76.13.48.245:/var/www/skoolific/iqrab3/APP/dist/index.html
+   pscp -pw "[REDACTED-PASSWORD]" APP\dist\index.html root@76.13.48.245:/var/www/skoolific/iqrab3/APP/dist/index.html
    ```
 3. When it asks "Store key in cache? (y/n)", type `y` and press Enter
 
@@ -30,7 +30,7 @@ Your browser is caching the old JavaScript file. I've fixed the code and added c
    ```
    ssh root@76.13.48.245
    ```
-   Password: `V@gSWi)Po712@TaWR3r9`
+   Password: `[REDACTED-PASSWORD]`
 
 2. Edit the file:
    ```

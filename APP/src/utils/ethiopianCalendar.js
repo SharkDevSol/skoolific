@@ -28,11 +28,15 @@ export function gregorianToEthiopian(gregDate) {
   const month = gregDate.getMonth() + 1;
   const day = gregDate.getDate();
 
-  // Algorithm: Ethiopian New Year is Sep 11 (or Sep 12 in leap years)
-  const isLeap = year % 4 === 3;
-  const newYearDay = isLeap ? 12 : 11;
+  // Ethiopian New Year is Sep 11 (or Sep 12 in Gregorian leap years)
+  const isGregorianLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  const newYearDay = isGregorianLeapYear(year) ? 12 : 11;
 
-  let ethYear = year - 8;
+  // On or after Ethiopian New Year in this Gregorian year → current Ethiopian year
+  // Before Ethiopian New Year → previous Ethiopian year
+  const afterNewYear = month > 9 || (month === 9 && day >= newYearDay);
+  const ethYear = afterNewYear ? year - 7 : year - 8;
+
   let ethMonth = 0;
   let ethDay = 0;
 
@@ -42,8 +46,7 @@ export function gregorianToEthiopian(gregDate) {
 
   if (diffDays < 0) {
     // Date is before Ethiopian New Year — belongs to previous Ethiopian year
-    ethYear = year - 9;
-    const prevNewYearDay = (year - 1) % 4 === 3 ? 12 : 11;
+    const prevNewYearDay = isGregorianLeapYear(year - 1) ? 12 : 11;
     const prevStartOfYear = new Date(year - 1, 8, prevNewYearDay);
     const prevDiffDays = Math.floor((gregDate - prevStartOfYear) / (1000 * 60 * 60 * 24));
     
@@ -108,8 +111,9 @@ export function getEthiopianDate() {
  * @returns {Date} JavaScript Date object
  */
 export function ethiopianToGregorian(ethYear, ethMonth, ethDay) {
-  // Ethiopian New Year in Gregorian: Sep 11 (or 12 in leap years)
-  const gregYear = ethYear + 8;
+  // Ethiopian New Year in Gregorian: Sep 11 (or Sep 12 in leap years)
+  // Ethiopian year 2018 started Sep 11, 2025 → gregYear = ethYear + 7
+  const gregYear = ethYear + 7;
   const isLeap = gregYear % 4 === 3;
   const newYearDay = isLeap ? 12 : 11;
   

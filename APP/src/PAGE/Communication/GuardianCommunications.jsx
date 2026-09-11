@@ -47,7 +47,7 @@ const GuardianCommunications = ({ wards, guardianInfo }) => {
         // Fetch class teachers for ward classes - this is the most reliable method
         if (wardClasses.length > 0) {
           try {
-            const assignmentsRes = await axios.get('https://v2.skoolific.com/api/class-teacher/assignments');
+            const assignmentsRes = await axios.get('/api/class-teacher/assignments');
             const assignments = assignmentsRes.data || [];
             
             assignments.forEach(assignment => {
@@ -74,7 +74,7 @@ const GuardianCommunications = ({ wards, guardianInfo }) => {
         // Use the guardian-specific endpoint to get relevant teachers
         if (guardianUsername) {
           try {
-            const contactsRes = await axios.get(`https://v2.skoolific.com/api/chats/contacts/guardian/${guardianUsername}`);
+            const contactsRes = await axios.get(`/api/chats/contacts/guardian/${guardianUsername}`);
             if (contactsRes.data?.length > 0) {
               contactsRes.data.forEach(contact => {
                 // Only add if not already in map and has valid staff_ ID
@@ -91,7 +91,7 @@ const GuardianCommunications = ({ wards, guardianInfo }) => {
         // Only fetch all contacts if we have no teachers yet (fallback)
         if (teacherMap.size === 0) {
           try {
-            const allContactsRes = await axios.get('https://v2.skoolific.com/api/chats/contacts');
+            const allContactsRes = await axios.get('/api/chats/contacts');
             (allContactsRes.data || []).forEach(contact => {
               // Only add contacts with valid staff_ ID prefix
               if (contact.id?.startsWith('staff_')) {
@@ -117,7 +117,7 @@ const GuardianCommunications = ({ wards, guardianInfo }) => {
         dispatch(setContacts({ role: 'guardian', contacts: finalContacts }));
 
         // Fetch existing messages
-        const requestsRes = await axios.get(`https://v2.skoolific.com/api/chats/user/${guardianId}`);
+        const requestsRes = await axios.get(`/api/chats/user/${guardianId}`);
         requestsRes.data.forEach((request) => {
           const otherUserId = request.sender_id === guardianId ? request.recipient_id : request.sender_id;
           dispatch(addRequest({ userId: otherUserId, request }));
@@ -132,7 +132,7 @@ const GuardianCommunications = ({ wards, guardianInfo }) => {
     fetchData();
 
     // Setup socket connection
-    socket.current = io('https://v2.skoolific.com');
+    socket.current = io('');
     socket.current.emit('join', guardianId);
 
     socket.current.on('new_request', (request) => {
@@ -186,7 +186,7 @@ const GuardianCommunications = ({ wards, guardianInfo }) => {
     
     setSending(true);
     try {
-      const response = await axios.post('https://v2.skoolific.com/api/chats/requests', {
+      const response = await axios.post('/api/chats/requests', {
         senderId: guardianId,
         recipientId: activeChatId,
         questions: [messageInput.trim()]
@@ -238,7 +238,7 @@ const GuardianCommunications = ({ wards, guardianInfo }) => {
     
     setSending(true);
     try {
-      const response = await axios.post('https://v2.skoolific.com/api/chats/requests', {
+      const response = await axios.post('/api/chats/requests', {
         senderId: guardianId,
         recipientId: activeChatId,
         questions: newRequestData.questions.filter(q => q.trim())

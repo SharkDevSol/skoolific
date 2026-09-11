@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import styles from './Task6.module.css';
 import ScheduleEditor from './ScheduleEditor';
+import { getBranchCode } from '../utils/branchCode';
 
 const Task7 = ({ onComplete, onScheduleGenerated }) => {
   const [step, setStep] = useState(1);
@@ -335,7 +336,7 @@ const Task7 = ({ onComplete, onScheduleGenerated }) => {
             setShiftPeriodMatrix(initialMatrix);
           } else {
             // Fallback: build from processedData with shift from classConfigs
-            const classConfigsRes = await axios.get('/api/students/form-structure');
+            const classConfigsRes = await axios.get('/api/students/form-structure', { headers: { 'x-branch-code': (getBranchCode() || '').toUpperCase() } });
             const ccData = classConfigsRes.data?.classConfigs || {};
             const fallbackMatrix = {};
             processedData.forEach(key => {

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { FiGlobe, FiMoon, FiSun, FiCheck, FiDownload, FiSmartphone } from 'react-icons/fi';
+import { FiGlobe, FiMoon, FiSun, FiCheck, FiDownload, FiSmartphone, FiKey, FiUser, FiLogOut } from 'react-icons/fi';
 import { useApp } from '../../context/AppContext';
 import { useInstallPrompt } from '../../hooks/useInstallPrompt';
+import api from '../../utils/api';
 import styles from './SettingsTab.module.css';
 
 // Available languages
@@ -43,12 +44,20 @@ export const loadUserSettings = (userId, userType) => {
   return null;
 };
 
-const SettingsTab = ({ userId, userType, appType, appName }) => {
+const SettingsTab = ({ userId, userType, appType, appName, onLogout }) => {
   const { language, updateLanguage, theme, updateTheme, t } = useApp();
   const [currentLanguage, setCurrentLanguage] = useState(language || 'en');
   const [isDarkMode, setIsDarkMode] = useState(theme?.mode === 'dark');
   const { isInstallable, isInstalled, promptInstall } = useInstallPrompt(appType);
   const [installing, setInstalling] = useState(false);
+
+  // Account (change username / password)
+  const [showAccount, setShowAccount] = useState(false);
+  const [accLoading, setAccLoading] = useState(false);
+  const [accMsg, setAccMsg] = useState('');
+  const [accError, setAccError] = useState('');
+  const [usernameForm, setUsernameForm] = useState({ currentUsername: '', newUsername: '', password: '' });
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
   // Debug logging
   useEffect(() => {
@@ -128,6 +137,50 @@ const SettingsTab = ({ userId, userType, appType, appName }) => {
     }
   };
 
+  // Change username
+  const handleChangeUsername = async (e) => {
+    e.preventDefault();
+    setAccMsg(''); setAccError('');
+    setAccLoading(true);
+    try {
+      const res = await api.post('/user-profile/guardian/change-username', {
+        currentUsername: usernameForm.currentUsername,
+        newUsername: usernameForm.newUsername,
+        password: usernameForm.password
+      });
+      setAccMsg(res.data.message || 'Username changed successfully');
+      setUsernameForm({ currentUsername: '', newUsername: '', password: '' });
+    } catch (err) {
+      setAccError(err.response?.data?.error || 'Failed to change username');
+    } finally {
+      setAccLoading(false);
+    }
+  };
+
+  // Change password
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setAccMsg(''); setAccError('');
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setAccError('Passwords do not match');
+      return;
+    }
+    setAccLoading(true);
+    try {
+      const res = await api.post('/user-profile/guardian/change-password', {
+        username: userId,
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+      setAccMsg(res.data.message || 'Password changed successfully');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      setAccError(err.response?.data?.error || 'Failed to change password');
+    } finally {
+      setAccLoading(false);
+    }
+  };
+
   // Get app icon based on type
   const getAppIcon = () => {
     const icons = {
@@ -197,6 +250,40 @@ const SettingsTab = ({ userId, userType, appType, appName }) => {
         </div>
       </div>
 
+      {/* Account (change username / password) */}
+      <div className={styles.settingsSection}>
+        <div className={styles.sectionHeader} onClick={() => setShowAccount(v => !v)} style={{ cursor: 'pointer' }}>
+          <FiKey className={styles.sectionIcon} />
+          <span className={styles.sectionTitle}>Account</span>
+          <span style={{ marginLeft: 'auto', fontSize: '0.8em', opacity: 0.6 }}>{showAccount ? '▾' : '▸'}</span>
+        </div>
+
+        {showAccount && (
+          <div className={styles.accountForms}>
+            {accMsg && <div className={styles.accSuccess}>{accMsg}</div>}
+            {accError && <div className={styles.accErrorText}>{accError}</div>}
+
+            {/* Username */}
+            <form onSubmit={handleChangeUsername} className={styles.accForm}>
+              <p className={styles.accFormTitle}><FiUser size={13} /> Change Username</p>
+              <input className={styles.accInput} type="text" placeholder="Current username" value={usernameForm.currentUsername} onChange={(e) => setUsernameForm({ ...usernameForm, currentUsername: e.target.value })} required />
+              <input className={styles.accInput} type="text" placeholder="New username" value={usernameForm.newUsername} onChange={(e) => setUsernameForm({ ...usernameForm, newUsername: e.target.value })} required />
+              <input className={styles.accInput} type="password" placeholder="Password to confirm" value={usernameForm.password} onChange={(e) => setUsernameForm({ ...usernameForm, password: e.target.value })} required />
+              <button className={styles.accBtn} type="submit" disabled={accLoading}>Update Username</button>
+            </form>
+
+            {/* Password */}
+            <form onSubmit={handleChangePassword} className={styles.accForm}>
+              <p className={styles.accFormTitle}>🔒 Change Password</p>
+              <input className={styles.accInput} type="password" placeholder="Current password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} required />
+              <input className={styles.accInput} type="password" placeholder="New password (min 8 chars)" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} required />
+              <input className={styles.accInput} type="password" placeholder="Confirm new password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} required />
+              <button className={styles.accBtn} type="submit" disabled={accLoading}>Update Password</button>
+            </form>
+          </div>
+        )}
+      </div>
+
       {/* Install App Section */}
       <div className={styles.settingsSection}>
         <div className={styles.sectionHeader}>
@@ -252,6 +339,16 @@ const SettingsTab = ({ userId, userType, appType, appName }) => {
           {t('settingsInfo') || 'Your preferences are saved automatically and will be remembered next time you log in.'}
         </p>
       </div>
+
+      {/* Logout */}
+      {onLogout && (
+        <div className={styles.settingsSection}>
+          <button className={styles.logoutButton} onClick={onLogout}>
+            <FiLogOut size={18} />
+            <span>Logout</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

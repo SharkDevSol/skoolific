@@ -25,12 +25,12 @@
 }
 
 .logoContainer {
-  margin-bottom: 50px;
+  margin-bottom: 40px;
 }
 
 .logo {
-  width: 200px;
-  height: 200px;
+  width: 320px;
+  height: 320px;
   margin: 0 auto;
   filter: drop-shadow(0 10px 40px rgba(139, 92, 246, 0.3));
 }
@@ -276,8 +276,8 @@
   }
 
   .logo {
-    width: 160px;
-    height: 160px;
+    width: 260px;
+    height: 260px;
   }
 
   .pencil {
@@ -299,8 +299,8 @@
   }
 
   .logo {
-    width: 140px;
-    height: 140px;
+    width: 200px;
+    height: 200px;
   }
 
   .pencil {

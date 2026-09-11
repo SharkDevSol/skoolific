@@ -33,18 +33,19 @@ router.get('/attendance-issues', authenticateWithBranch, async (req, res) => {
     let registeredStaffNames = [];
     let registeredStaffIds = [];
     
-    const staffTypes = ['Teachers', 'Administrative Staff', 'Supportive Staff'];
+    const port = process.env.PORT || 5052;
+    const staffTypes = ['Teachers', 'Administrative Staff', 'Supportive Staff', 'Finance'];
     
     for (const staffType of staffTypes) {
       try {
         const classesResponse = await axios.get(
-          `http://localhost:5000/api/staff/classes?staffType=${encodeURIComponent(staffType)}`
+          `http://localhost:${port}/api/staff/classes?staffType=${encodeURIComponent(staffType)}`
         );
         
         for (const className of classesResponse.data) {
           try {
             const dataResponse = await axios.get(
-              `http://localhost:5000/api/staff/data/${staffType}/${className}`
+              `http://localhost:${port}/api/staff/data/${staffType}/${className}`
             );
             
             const staffData = dataResponse.data.data || [];

@@ -9,7 +9,7 @@ import Button from '../../COMPONENTS/Button/Button';
 import EditSalaryModal from './components/EditSalaryModal';
 import { getCurrentEthiopianMonth } from '../../utils/ethiopianCalendar';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://v2.skoolific.com';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const SalaryManagement = () => {
   const { t } = useTranslation();
@@ -44,7 +44,7 @@ const SalaryManagement = () => {
     setError(null);
     try {
       const token = localStorage.getItem('authToken') || localStorage.getItem('token');
-      const types = ['Teachers', 'Supportive Staff', 'Administrative Staff'];
+      const types = ['Teachers', 'Supportive Staff', 'Administrative Staff', 'Finance'];
       let allStaffMembers = [];
       
       for (const staffType of types) {

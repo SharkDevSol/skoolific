@@ -8,6 +8,7 @@ import { getPermissionPath } from '../../config/adminPermissions';
 import { ValidationRules, ErrorMessages } from '../../utils/validation';
 import Input from '../../COMPONENTS/Input/Input';
 import Button from '../../COMPONENTS/Button/Button';
+import { getBranchCode, setBranchCode } from '../../utils/branchCode';
 import ThemeToggle from '../../COMPONENTS/ThemeToggle/ThemeToggle';
 import LanguageSelector from '../../COMPONENTS/LanguageSelector/LanguageSelector';
 import Toast from '../../COMPONENTS/Toast/Toast';
@@ -41,7 +42,8 @@ const Login = () => {
         setRememberMe(true);
       } catch {}
     } else {
-      const savedBranchCode = localStorage.getItem('branchCode');
+      // Use rememberedBranchCode for login form pre-fill (won't affect API calls)
+      const savedBranchCode = localStorage.getItem('rememberedBranchCode') || getBranchCode();
       if (savedBranchCode) {
         setCredentials(prev => ({ ...prev, branchCode: savedBranchCode }));
       }
@@ -111,7 +113,7 @@ const Login = () => {
         localStorage.setItem('adminUser', JSON.stringify(user));
         localStorage.setItem('userType', user.userType || 'admin');
         localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('branchCode', credentials.branchCode);
+        setBranchCode(credentials.branchCode, true);
 
         if (user.permissions) {
           localStorage.setItem('userPermissions', JSON.stringify(user.permissions));

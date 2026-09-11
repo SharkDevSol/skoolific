@@ -25,6 +25,7 @@ export const ADMIN_PERMISSIONS = {
       { key: 'finance_dashboard', label: 'Finance Dashboard', path: '/finance' },
       { key: 'fee_management', label: 'Fee Management', path: '/finance/fee-management' },
       { key: 'monthly_payments', label: 'Monthly Payments', path: '/finance/monthly-payments' },
+      { key: 'student_exemption', label: 'Student Exemption', path: '/finance/student-exemption' },
       { key: 'payment_settings', label: 'Payment Settings', path: '/finance/monthly-payment-settings' },
       { key: 'financial_reports', label: 'Financial Reports', path: '/finance/reports' },
       { key: 'invoice_management', label: 'Invoice Management', path: '/finance/invoices' },
@@ -38,7 +39,6 @@ export const ADMIN_PERMISSIONS = {
       { key: 'hr_dashboard', label: 'HR Dashboard', path: '/hr' },
       { key: 'salary_management', label: 'Salary Management', path: '/hr/salary' },
       { key: 'teachers_attendance', label: 'Teachers Attendance', path: '/hr/attendance' },
-      { key: 'device_status', label: 'Device Status', path: '/hr/device-status' },
       { key: 'shift_time_settings', label: 'Time & Shift Settings', path: '/hr/shift-time-settings' },
       { key: 'attendance_deduction_settings', label: 'Attendance Deductions', path: '/hr/attendance-deduction-settings' },
       { key: 'leave_management', label: 'Leave Management', path: '/hr/leave' },
@@ -78,6 +78,7 @@ export const ADMIN_PERMISSIONS = {
       { key: 'ai_books', label: 'My Books', path: '/ai/books' },
       { key: 'ai_upload_books', label: 'Upload Books', path: '/ai/books/upload' },
       { key: 'ai_generate', label: 'Generate Content', path: '/ai/generate/lesson-plan' },
+      { key: 'ai_test_generator', label: 'Test Generator', path: '/ai/test-generator' },
     ],
   },
   evaluation: {
@@ -93,7 +94,6 @@ export const ADMIN_PERMISSIONS = {
     permissions: [
       { key: 'communication', label: 'Communication', path: '/communication' },
       { key: 'faults', label: 'Faults', path: '/faults' },
-      { key: 'post', label: 'Posts', path: '/post' },
     ],
   },
   administration: {
@@ -101,6 +101,8 @@ export const ADMIN_PERMISSIONS = {
     permissions: [
       { key: 'dashboard', label: 'Dashboard', path: '/dashboard' },
       { key: 'tasks', label: 'Tasks', path: '/tasks' },
+      { key: 'post', label: 'Posts', path: '/post' },
+      { key: 'device_status', label: 'Device Status', path: '/device-status' },
       { key: 'settings', label: 'Settings', path: '/settings' },
       { key: 'admin_sub_accounts', label: 'Sub-Accounts', path: '/admin-sub-accounts' },
     ],

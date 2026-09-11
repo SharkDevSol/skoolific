@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import SubjectMappingSetup from './SubjectMappingSetup';
 import './CreateMarklist/MarkListFrontend.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.origin ? window.location.origin + '/api' : (import.meta.env.VITE_API_URL || '/api'));
 
 const MarkListForm = () => {
   const { t } = useApp();

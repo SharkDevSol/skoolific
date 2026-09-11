@@ -66,7 +66,7 @@ The setup will automatically fall back to your main database credentials from `.
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
-DB_PASSWORD=12345678
+DB_PASSWORD=[REDACTED-PASSWORD]
 DB_NAME=skoolific
 ```
 
