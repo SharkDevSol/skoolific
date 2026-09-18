@@ -26,7 +26,7 @@ const InvoiceReceipt = React.forwardRef(({ receiptData, schoolInfo }, ref) => {
           )}
         </div>
         <div className={styles.schoolInfo}>
-          <h2 className={styles.schoolNameEn}>{schoolInfo?.nameEn || 'Dugsiga Barbaarinta Caruurta, Hoose, Dhexe & Sare Ee Iqra'}</h2>
+          <h2 className={styles.schoolNameEn}>{schoolInfo?.nameEn || 'School Name (Somali)'}</h2>
           <h3 className={styles.schoolNameAm}>{schoolInfo?.nameAm || 'ኢቅራ ሮጸ አሕፃናት አንደኛና ሁለተኛ ደረጃ ት/ቤት'}</h3>
           <p className={styles.schoolNameEn2}>Iqra Kindergarten, Primary, Intermediate and Secondary School</p>
           <p className={styles.schoolNameAr}>اقرأ روضة الأطفال ومدرسة الإبتدائية والمتوسطة والثانويه</p>

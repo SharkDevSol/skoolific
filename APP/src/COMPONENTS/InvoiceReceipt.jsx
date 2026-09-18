@@ -33,22 +33,22 @@ const InvoiceReceipt = React.forwardRef(({ receiptData, schoolInfo }, ref) => {
             <div className={styles.badgeWrap}>
               <div className={styles.badge}>
                 {schoolInfo?.logo ? (
-                  <img src={schoolInfo.logo} alt="Iqra Academy" className={styles.badgeImg} />
+                  <img src={schoolInfo.logo} alt="School logo" className={styles.badgeImg} />
                 ) : (
-                  <span className={styles.badgeText}>IQRA</span>
+                  <span className={styles.badgeText}>{(schoolInfo?.name || "SCHOOL").substring(0, 6).toUpperCase()}</span>
                 )}
               </div>
             </div>
             <div className={styles.wordmark}>
-              <span className={styles.iqra}>IQRA</span>
-              <span className={styles.academy}>Academy</span>
+              <span className={styles.iqra}>{(schoolInfo?.name || "SCHOOL").split(" ")[0].toUpperCase()}</span>
+              <span className={styles.academy}>{schoolInfo?.name ? schoolInfo.name.split(" ").slice(1).join(" ") || "ACADEMY" : "ACADEMY"}</span>
             </div>
           </div>
 
           <div className={styles.identity}>
-            <p className={styles.so}>Dugsiga Barbaarinta Caruurta, Hoose, Dhexe &amp; Sare Ee Iqra</p>
+            <p className={styles.so}>Dugsiga & School Name (Somali)</p>
             <p className={styles.am}>ኢቅራ አፀደሕፃናት አንደኛና ሁለተኛ ደረጃ ት/ቤት</p>
-            <p className={styles.enName}>Iqra Kindergarten, Primary, Intermediate and Secondary School</p>
+            <p className={styles.enName}>School Name Kindergarten, Primary, Intermediate and Secondary School</p>
             <p className={styles.ar} dir="rtl">اقرأ روضة الأطفال ومدرسة الإبتدائية والمتوسطة والثانويه</p>
             <p className={styles.contact}>Jigjiga, Ethiopia &nbsp;·&nbsp; Invoice ID: <strong>{displayInvoiceId}</strong></p>
           </div>
@@ -111,7 +111,7 @@ const InvoiceReceipt = React.forwardRef(({ receiptData, schoolInfo }, ref) => {
           </div>
         </div>
 
-        <div className={styles.finePrint}>Iqra Academy &nbsp;•&nbsp; Jigjiga, Ethiopia &nbsp;•&nbsp; Invoice ID: {displayInvoiceId}</div>
+        <div className={styles.finePrint}>School Academy &nbsp;•&nbsp; Jigjiga, Ethiopia &nbsp;•&nbsp; Invoice ID: {displayInvoiceId}</div>
 
       </div>
     </div>

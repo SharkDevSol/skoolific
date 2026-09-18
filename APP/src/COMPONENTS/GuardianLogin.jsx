@@ -131,8 +131,8 @@ const GuardianLogin = () => {
           </div>
 
           <div className={styles.logoSection}>
-            <img src="/uploads/branding/icon-1785006632472.png" alt="IQRA" className={styles.logo} />
-            <h1 className={styles.title}>{t('auth.guardianPortalTitle', 'IQRA Parent')}</h1>
+            <img src="/api/settings/branding/logo" alt="School logo" className={styles.logo} />
+            <h1 className={styles.title}>{t('auth.guardianPortalTitle', 'School Parent')}</h1>
             <p className={styles.subtitle}>{t('auth.guardianPortalSubtitle', "Stay connected with your child's school")}</p>
           </div>
           

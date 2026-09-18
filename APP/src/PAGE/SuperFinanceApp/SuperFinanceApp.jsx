@@ -124,7 +124,7 @@ const SuperFinanceApp = () => {
         localStorage.setItem('isLoggedIn', 'true');
         // Default branch = first allowed branch (or previously selected one)
         const savedBranch = sessionStorage.getItem('branchCode');
-        const firstBranch = (parsed.branches?.[0]?.branchCode) || (parsed.allowedBranches?.[0] || 'IQRA1');
+        const firstBranch = (parsed.branches?.[0]?.branchCode) || (parsed.allowedBranches?.[0] || 'BRANCH1');
         if (!savedBranch) {
           sessionStorage.setItem('branchCode', firstBranch);
           setBranchCodeState(firstBranch);

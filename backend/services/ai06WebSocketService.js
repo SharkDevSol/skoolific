@@ -217,7 +217,7 @@ class AI06WebSocketService {
       const pool = dbName
         ? new Pool({
             user: process.env.DB_USER || 'iqra',
-            password: process.env.DB_PASSWORD || 'iqra1768',
+            password: process.env.DB_PASSWORD || '',
             host: process.env.DB_HOST || 'localhost',
             port: parseInt(process.env.DB_PORT, 10) || 5432,
             database: dbName

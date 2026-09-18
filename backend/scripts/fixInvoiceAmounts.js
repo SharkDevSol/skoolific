@@ -8,7 +8,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const DB_USER = process.env.DB_USER || 'iqra';
-const DB_PASSWORD = String(process.env.DB_PASSWORD || 'iqra1768');
+const DB_PASSWORD = String(process.env.DB_PASSWORD || '');
 const DB_HOST = process.env.DB_HOST || 'localhost';
 const DB_PORT = parseInt(process.env.DB_PORT || '5432');
 const MASTER_DB = process.env.DB_NAME || 'iqrab1';

@@ -11,7 +11,7 @@ async function backfillBranch(dbName) {
     user: 'iqra',
     host: 'localhost',
     database: dbName,
-    password: 'iqra1768',
+    password: process.env.DB_PASSWORD || '',
     port: 5432,
   });
 

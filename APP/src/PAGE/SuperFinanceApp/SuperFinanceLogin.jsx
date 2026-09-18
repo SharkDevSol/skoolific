@@ -32,7 +32,7 @@ const SuperFinanceLogin = ({ onLogin }) => {
         localStorage.setItem('authToken', token);
         localStorage.setItem('isLoggedIn', 'true');
         // Default branch = first allowed branch
-        const firstBranch = (user.branches?.[0]?.branchCode) || (user.allowedBranches?.[0] || 'IQRA1');
+        const firstBranch = (user.branches?.[0]?.branchCode) || (user.allowedBranches?.[0] || 'BRANCH1');
         sessionStorage.setItem('branchCode', firstBranch);
         if (onLogin) onLogin(user);
         navigate('/app/super-finance/');

@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 async function check() {
   // Check iqrab1 (default) - same user/password
   const pool = new Pool({
-    host: 'localhost', port: 5432, user: 'iqra', password: 'iqra1768',
+    host: 'localhost', port: 5432, user: 'iqra', password: process.env.DB_PASSWORD || '',
     database: 'iqrab1'
   });
 
@@ -47,7 +47,7 @@ async function check() {
 
   // Now try iqrab2
   const pool2 = new Pool({
-    host: 'localhost', port: 5432, user: 'iqra', password: 'iqra1768',
+    host: 'localhost', port: 5432, user: 'iqra', password: process.env.DB_PASSWORD || '',
     database: 'iqrab2'
   });
 

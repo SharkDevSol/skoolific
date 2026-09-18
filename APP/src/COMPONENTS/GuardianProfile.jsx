@@ -95,7 +95,7 @@ const GuardianProfile = () => {
   const [reportCardWard, setReportCardWard] = useState(null);
   const [reportData, setReportData] = useState(null);
   const [schoolInfo, setSchoolInfo] = useState({
-    name: 'IQRA ACADEMY',
+    name: 'SCHOOL ACADEMY',
     address: '',
     phone: '',
     email: '',
@@ -252,12 +252,12 @@ const GuardianProfile = () => {
         const baseUrl = window.location.origin || '';
         setSchoolInfo(prev => ({
           ...prev,
-          name: b.website_name || 'IQRA ACADEMY',
+          name: b.website_name || 'SCHOOL ACADEMY',
           address: b.school_address || '',
           phone: b.school_phone || '',
           email: b.school_email || '',
           academicYear: b.academic_year || '',
-          // Prefer school_logo; fall back to website_icon (IQRA favicon) when
+          // Prefer school_logo; fall back to website_icon when
           // school_logo is null/empty — this is the case on iqra.skoolific.com.
           logo: b.school_logo
             ? `${baseUrl}/uploads/branding/${b.school_logo}`
@@ -1120,7 +1120,7 @@ const GuardianProfile = () => {
           </div>
         ) : (
           <div className={styles.reportCardPreviewSection}>
-            <h3 className={styles.previewTitle}>Preview - IQRA Academy Report Card</h3>
+            <h3 className={styles.previewTitle}>Preview - School Report Card</h3>
             <div className={styles.reportCardPreview}>
               <ReportCardFront data={reportData} schoolInfo={schoolInfo} />
             </div>
@@ -2187,7 +2187,7 @@ const GuardianProfile = () => {
   if (isLoading) {
     return (
       <MobileProfileLayout 
-        title="IQRA Parent" 
+        title="School Parent" 
         onLogout={handleLogout}
         onNotificationClick={handleNotificationClick}
         notificationCount={unreadNotificationCount}
@@ -2201,7 +2201,7 @@ const GuardianProfile = () => {
   if (error) {
     return (
       <MobileProfileLayout 
-        title="IQRA Parent" 
+        title="School Parent" 
         onLogout={handleLogout}
         onNotificationClick={handleNotificationClick}
         notificationCount={unreadNotificationCount}
@@ -2220,7 +2220,7 @@ const GuardianProfile = () => {
   if (!guardianInfo || wards.length === 0) {
     return (
       <MobileProfileLayout 
-        title="IQRA Parent" 
+        title="School Parent" 
         onLogout={handleLogout}
         onNotificationClick={handleNotificationClick}
         notificationCount={unreadNotificationCount}
@@ -2235,7 +2235,7 @@ const GuardianProfile = () => {
 
   return (
     <MobileProfileLayout
-      title={guardianInfo?.guardian_name || 'IQRA Parent'}
+      title={guardianInfo?.guardian_name || 'School Parent'}
       onLogout={handleLogout}
       onRefresh={handleRefresh}
       onNotificationClick={handleNotificationClick}

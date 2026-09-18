@@ -211,7 +211,7 @@ router.post('/sql', authenticateWithBranch, async (req, res) => {
         'pg_dump',
         ['-h', 'localhost', '-U', process.env.DB_USER || 'iqra', '-d', dbName, '--no-owner', '--no-privileges'],
         {
-          env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD || 'iqra1768' },
+          env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD || '' },
           maxBuffer: 512 * 1024 * 1024
         },
         (err) => err ? reject(new Error(err.message)) : resolve()

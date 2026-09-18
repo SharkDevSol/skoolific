@@ -14,7 +14,7 @@ const ETH_MONTHS = [
 
 const I18N = {
   en: {
-    appName: 'IQRA Super Admin', loginSub: 'All branch reports in one place',
+    appName: 'Super Admin', loginSub: 'All branch reports in one place',
     signIn: 'Sign In', signingIn: 'Signing in...', username: 'Username', password: 'Password',
     logout: 'Logout', allBranches: 'All Branches', loading: 'Loading reports...', loginFailed: 'Login failed',
     home: 'Home', students: 'Students', attendance: 'Attendance', marks: 'Marks', faults: 'Faults', finance: 'Finance', sms: 'SMS', settings: 'Settings',
@@ -44,7 +44,7 @@ const I18N = {
     perBranchDetail: 'Each branch shows its own classes and totals', ofExpected: 'of expected', collectedWord: 'collected'
   },
   so: {
-    appName: 'IQRA Super Admin', loginSub: 'Warbixinaha dhammaan laamaha hal meel',
+    appName: 'Super Admin', loginSub: 'Warbixinaha dhammaan laamaha hal meel',
     signIn: 'Soo Gal', signingIn: 'Soo gelaya...', username: 'Magaca Isticmaalaha', password: 'Furaha',
     logout: 'Ka Bax', allBranches: 'Dhammaan Laamaha', loading: 'Warbixino la shubayo...', loginFailed: 'Soo geliddu way fashilantay',
     home: 'Guriga', students: 'Ardayda', attendance: 'Imaanshaha', marks: 'Dhibcaha', faults: 'Khaladaadka', finance: 'Maaliyadda', sms: 'SMS', settings: 'Dejinta',
@@ -74,7 +74,7 @@ const I18N = {
     perBranchDetail: 'Laan kastaa waxay muujisaa fasalladeeda iyo wadarta', ofExpected: 'laga filayay', collectedWord: 'la ururiyay'
   },
   am: {
-    appName: 'ኢቅራ ሱፐር አድሚን', loginSub: 'የሁሉም ቅርንጫፎች ሪፖርቶች በአንድ ቦታ',
+    appName: 'ሱፐር አድሚን', loginSub: 'የሁሉም ቅርንጫፎች ሪፖርቶች በአንድ ቦታ',
     signIn: 'ግባ', signingIn: 'እየገባ...', username: 'የተጠቃሚ ስም', password: 'የይለፍ ቃል',
     logout: 'ውጣ', allBranches: 'ሁሉም ቅርንጫፎች', loading: 'ሪፖርቶች እየጫኑ...', loginFailed: 'መግባት አልተሳካም',
     home: 'መነሻ', students: 'ተማሪዎች', attendance: 'መገኘት', marks: 'ውጤቶች', faults: 'ጥፋቶች', finance: 'ፋይናንስ', sms: 'SMS', settings: 'ቅንብሮች',

@@ -103,12 +103,12 @@ const notifyStaffCredentialChange = async (globalStaffId, type, result, details)
     let message;
     if (result === 'success') {
       if (type === 'username') {
-        message = `IQRA ACADEMY: Your login ${label} was changed successfully to "${details.newUsername}". If this was not you, please contact the school administration immediately.`;
+        message = `SCHOOL ACADEMY: Your login ${label} was changed successfully to "${details.newUsername}". If this was not you, please contact the school administration immediately.`;
       } else {
-        message = 'IQRA ACADEMY: Your login password was changed successfully. If this was not you, please contact the school administration immediately.';
+        message = 'SCHOOL ACADEMY: Your login password was changed successfully. If this was not you, please contact the school administration immediately.';
       }
     } else {
-      message = `IQRA ACADEMY: Your request to change your login ${label} was NOT successful. ${details.error || 'Please try again or contact the school administration.'}`;
+      message = `SCHOOL ACADEMY: Your request to change your login ${label} was NOT successful. ${details.error || 'Please try again or contact the school administration.'}`;
     }
 
     const smsResult = await sendSMS(phone, message, null, {

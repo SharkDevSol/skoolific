@@ -1018,7 +1018,7 @@ router.post('/add-student', upload.any(), async (req, res) => {
           guardian_name: guardianName || 'Guardian',
           guardian_username: guardianUsername || '',
           guardian_password: guardianPassword || '',
-          school_name: 'IQRA ACADEMY',
+          school_name: 'SCHOOL ACADEMY',
           guardian_app_link: 'https://iqra.skoolific.com/app/guardian-login',
           branch_code: req.branchCode || ''
         };

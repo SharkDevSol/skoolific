@@ -291,7 +291,7 @@ const MonthlyPaymentsNew = () => {
       const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
       setSchoolInfo({
         logo: response.data.logo ? `${API_BASE}${response.data.logo}` : null,
-        nameEn: response.data.schoolName || 'Dugsiga Barbaarinta Caruurta, Hoose, Dhexe & Sare Ee Iqra',
+        nameEn: response.data.schoolName || 'School Name (Somali)',
         nameAm: response.data.schoolNameAmharic || 'ኢቅራ ሮጸ አሕፃናት አንደኛና ሁለተኛ ደረጃ ት/ቤት'
       });
     } catch (error) {
@@ -299,7 +299,7 @@ const MonthlyPaymentsNew = () => {
       // Use default values
       setSchoolInfo({
         logo: null,
-        nameEn: 'Dugsiga Barbaarinta Caruurta, Hoose, Dhexe & Sare Ee Iqra',
+        nameEn: 'School Name (Somali)',
         nameAm: 'ኢቅራ ሮጸ አሕፃናት አንደኛና ሁለተኛ ደረጃ ት/ቤት'
       });
     }

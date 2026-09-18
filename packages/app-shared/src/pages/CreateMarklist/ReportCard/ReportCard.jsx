@@ -26,7 +26,7 @@ const ReportCard = () => {
   const [allStudentsData, setAllStudentsData] = useState([]);
 
   const [schoolInfo, setSchoolInfo] = useState({
-    name: 'IQRA ACADEMY',
+    name: 'SCHOOL ACADEMY',
     address: '',
     phone: '+251775669 : 0911775841 : 0915710209',
     email: 'adilh5254@gmail.com',
@@ -50,7 +50,7 @@ const ReportCard = () => {
         const branding = brandingRes.data;
         setSchoolInfo(prev => ({
           ...prev,
-          name: branding.website_name || 'IQRA ACADEMY',
+          name: branding.website_name || 'SCHOOL ACADEMY',
           address: branding.school_address || '',
           phone: branding.school_phone || '+251775669 : 0911775841 : 0915710209',
           email: branding.school_email || 'adilh5254@gmail.com',

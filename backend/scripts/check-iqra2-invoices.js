@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 
 async function check() {
   const pool = new Pool({
-    connectionString: 'postgresql://iqra:iqra1768@localhost:5432/iqrab2?schema=school_comms&timezone=Africa/Addis_Ababa'
+    connectionString: 'postgresql://iqra:[PASSWORD]@localhost:5432/iqrab2?schema=school_comms&timezone=Africa/Addis_Ababa'
   });
 
   try {

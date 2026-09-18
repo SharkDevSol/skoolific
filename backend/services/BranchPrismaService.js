@@ -54,7 +54,7 @@ function getPrismaForDb(dbName) {
   }
 
   const dbUser = process.env.DB_USER || 'iqra';
-  const dbPassword = process.env.DB_PASSWORD || 'iqra1768';
+  const dbPassword = process.env.DB_PASSWORD || '';
   const dbHost = process.env.DB_HOST || 'localhost';
   const dbPort = process.env.DB_PORT || 5432;
 

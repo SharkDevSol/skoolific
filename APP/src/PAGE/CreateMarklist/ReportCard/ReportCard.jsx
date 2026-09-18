@@ -1,4 +1,4 @@
-// ReportCard.jsx - Iqra Academy Report Card Design
+// ReportCard.jsx - School Report Card Design
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../../utils/api';
 import styles from './ReportCard.module.css';
@@ -29,7 +29,7 @@ const ReportCard = () => {
   const [termCount, setTermCount] = useState(2);
 
   const [schoolInfo, setSchoolInfo] = useState({
-    name: 'IQRA ACADEMY',
+    name: 'SCHOOL ACADEMY',
     address: '',
     phone: '+251775669 : 0911775841 : 0915710209',
     email: 'adilh5254@gmail.com',
@@ -55,7 +55,7 @@ const ReportCard = () => {
         const baseUrl = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
         setSchoolInfo(prev => ({
           ...prev,
-          name: branding.website_name || 'IQRA ACADEMY',
+          name: branding.website_name || 'SCHOOL ACADEMY',
           address: branding.school_address || '',
           phone: branding.school_phone || '+251775669 : 0911775841 : 0915710209',
           email: branding.school_email || 'adilh5254@gmail.com',
@@ -334,7 +334,7 @@ const ReportCard = () => {
         <div className={styles.headerContent}>
           <FaAward className={styles.headerIcon} />
           <div>
-            <h1>Report Card - IQRA Academy</h1>
+            <h1>Report Card</h1>
             <p>A5 Report Card Design</p>
           </div>
         </div>
@@ -394,7 +394,7 @@ const ReportCard = () => {
         </div>
       ) : (
         <div className={styles.previewSection}>
-          <h3>Preview - IQRA Academy Report Card (A5)</h3>
+          <h3>Preview - School Report Card (A5)</h3>
           <div className={styles.previewCard}>
                 <ReportCardFront data={reportData} schoolInfo={schoolInfo} />
           </div>

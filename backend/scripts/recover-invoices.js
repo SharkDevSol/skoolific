@@ -4,9 +4,9 @@ const { Pool } = require('pg');
 const { PrismaClient } = require('@prisma/client');
 
 const pool = new Pool({
-  user: 'iqra', host: 'localhost', database: 'iqrab1', password: 'iqra1768', port: 5432
+  user: process.env.DB_USER || 'iqra', host: process.env.DB_HOST || 'localhost', database: process.env.DB_NAME || 'iqrab1', password: process.env.DB_PASSWORD || '', port: 5432
 });
-const prisma = new PrismaClient({ datasources: { db: { url: 'postgresql://iqra:iqra1768@localhost:5432/iqrab1?schema=school_comms' } } });
+const prisma = new PrismaClient({ datasources: { db: { url: 'postgresql://iqra:[PASSWORD]@localhost:5432/iqrab1?schema=school_comms' } } });
 
 const ETH_MONTHS = ['Meskerem','Tikimt','Hidar','Tahsas','Tir','Yekatit','Megabit','Miazia','Ginbot','Sene','Hamle','Nehase','Pagume'];
 const { toEthiopian, toGregorian } = require('./utils/ethiopianCalendar');

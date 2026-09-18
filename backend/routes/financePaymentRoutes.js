@@ -646,7 +646,7 @@ async function processPaymentSms(invoice, paymentAmount, paymentDate) {
       amount_paid: paymentAmount.toFixed(2),
       payment_date: paidDate,
       invoice_id: invoice.invoiceRefCode || invoice.id,
-      school_name: 'IQRA ACADEMY'
+      school_name: 'SCHOOL ACADEMY'
     }) || `Dear Parent/Guardian ${guardian_name || 'Valued Parent'},
 
 We have received your school fee payment successfully from ${student_name || 'your ward'}.
@@ -656,7 +656,7 @@ Date of payment: ${paidDate}
 INV-ID: ${invoice.invoiceRefCode || invoice.id}
 Thank you for your prompt payment and continued support.
 
-# IQRA ACADEMY & SKOOLIFIC`;
+# SCHOOL ACADEMY & SKOOLIFIC`;
 
     const smsResult = await sendSMS(guardian_phone, msg, null, {
       templateKey: 'payment_receipt',
@@ -729,7 +729,7 @@ async function processMultiPaymentSms(invoices, totalAmount, paymentDate) {
       amount_paid: totalAmount.toFixed(2),
       payment_date: paidDate,
       invoice_id: refCodes,
-      school_name: 'IQRA ACADEMY'
+      school_name: 'SCHOOL ACADEMY'
     }) || `Dear Parent/Guardian ${guardian_name || 'Valued Parent'},
 
 We have received your school fee payment successfully from ${student_name || 'your ward'}.
@@ -739,7 +739,7 @@ Date of payment: ${paidDate}
 INV-ID: ${refCodes}
 Thank you for your prompt payment and continued support.
 
-# IQRA ACADEMY & SKOOLIFIC`;
+# SCHOOL ACADEMY & SKOOLIFIC`;
 
     const smsResult = await sendSMS(guardian_phone, msg, null, {
       templateKey: 'payment_receipt',

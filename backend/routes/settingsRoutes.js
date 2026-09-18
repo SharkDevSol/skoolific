@@ -25,7 +25,7 @@ router.get('/branding', async (req, res) => {
     // Return default school info
     res.json({
       logo: logoPath,
-      schoolName: 'Dugsiga Barbaarinta Caruurta, Hoose, Dhexe & Sare Ee Iqra',
+      schoolName: 'School Name (Somali)',
       schoolNameAmharic: 'ኢቅራ ሮጸ አሕፃናት አንደኛና ሁለተኛ ደረጃ ት/ቤት',
       schoolNameEnglish: 'Iqra Kindergarten, Primary, Intermediate and Secondary School',
       schoolNameArabic: 'اقرأ روضة الأطفال ومدرسة الإبتدائية والمتوسطة والثانويه',

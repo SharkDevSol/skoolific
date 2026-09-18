@@ -9,7 +9,7 @@ const masterPool = new Pool({
   user: process.env.DB_USER || 'iqra',
   host: process.env.DB_HOST || 'localhost',
   database: process.env.DB_NAME || 'iqrab1',
-  password: String(process.env.DB_PASSWORD || 'iqra1768'),
+  password: String(process.env.DB_PASSWORD || ''),
   port: process.env.DB_PORT || 5432,
 });
 

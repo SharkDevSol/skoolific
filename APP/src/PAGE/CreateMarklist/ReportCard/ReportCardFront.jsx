@@ -36,10 +36,10 @@ const ReportCardFront = ({ data, schoolInfo }) => {
                 <img src={schoolInfo.logo || schoolInfo.website_icon} alt="Logo" className={styles.mainLogo} />
               </div>
               <div className={styles.schoolInfo}>
-                <div className={styles.schoolNameMain}>IQRA ACADEMY</div>
+                <div className={styles.schoolNameMain}>SCHOOL ACADEMY</div>
                 <div className={styles.schoolNameAmharic}>ኢቅራ የስላም መዋለ ናት ት/ቤት</div>
                 <div className={styles.schoolNameArabic}>اقرأ روضة الأطفال ومدرسة الإبتدائية والمتوسطة والثانويه</div>
-                <div className={styles.schoolNameEnglish}>IQRA Kindergarten, Primary, Intermediate and Secondary School</div>
+                <div className={styles.schoolNameEnglish}>School Name Here</div>
                 <div className={styles.schoolLocation}>Jigjiga-Ethiopia</div>
               </div>
             </div>

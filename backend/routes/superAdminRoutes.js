@@ -12,7 +12,7 @@ const { JWT_SECRET } = require('../middleware/jwtValidator');
 
 const DB_NAME = process.env.DB_NAME || 'iqrab1';
 const DB_USER = process.env.DB_USER || 'iqra';
-const DB_PASSWORD = String(process.env.DB_PASSWORD || 'iqra1768');
+const DB_PASSWORD = String(process.env.DB_PASSWORD || '');
 const DB_HOST = process.env.DB_HOST || 'localhost';
 const DB_PORT = parseInt(process.env.DB_PORT || '5432');
 

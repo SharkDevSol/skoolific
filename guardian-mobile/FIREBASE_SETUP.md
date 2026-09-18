@@ -1,6 +1,6 @@
 # Firebase Push Notifications — Step-by-Step Setup
 
-This guide turns push notifications ON for the "IQRA Parent" app.
+This guide turns push notifications ON for the "School Parent" app.
 You need a free Google account. It takes ~10 minutes.
 
 ## Part A — Create the Firebase project + get 2 files
@@ -18,7 +18,7 @@ You need a free Google account. It takes ~10 minutes.
    ```
    com.skoolific.guardian
    ```
-3. App nickname: `IQRA Parent`. Leave "debug signing certificate" blank for now.
+3. App nickname: `School Parent`. Leave "debug signing certificate" blank for now.
 4. Click **Register app**.
 
 ### Step 3 — Get `google-services.json` (the app-side file)
@@ -55,7 +55,7 @@ Send me both files (or their locations), and I will:
 1. Go to https://play.google.com/console and create a developer account ($25).
 2. Create a new app, enter `com.skoolific.guardian`.
 3. I'll produce the release `.aab` (`gradlew bundleRelease`).
-4. Upload the .aab, fill store listing (title "IQRA Parent", screenshots, description), set content rating, add a privacy policy URL, then submit for review.
+4. Upload the .aab, fill store listing (title "School Parent", screenshots, description), set content rating, add a privacy policy URL, then submit for review.
 
 ### Apple App Store (iOS) — $99/year
 1. Requires an Apple Developer account + a Mac (or a cloud Mac build service like EAS / Codemagic / MacStadium).
