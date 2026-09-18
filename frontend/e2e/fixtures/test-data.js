@@ -268,7 +268,7 @@ export const superAdminTestData = {
     {
       code: 'alk',
       name: 'Al Khwarizmi',
-      database: 'alkhwarizm'
+      database: 'school_branch'
     }
   ],
   aggregatedMetrics: {

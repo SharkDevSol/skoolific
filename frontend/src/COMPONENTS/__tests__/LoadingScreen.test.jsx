@@ -28,7 +28,7 @@ describe('LoadingScreen', () => {
     it('should display logo image', () => {
       render(<LoadingScreen />);
       const logo = screen.getByAltText(/ALKHWARIZM Logo/i);
-      expect(logo).toHaveAttribute('src', '/alkhwarizm-logo.png');
+      expect(logo).toHaveAttribute('src', '/skoolific-icon.png');
     });
   });
 

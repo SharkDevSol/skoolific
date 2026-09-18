@@ -14,7 +14,7 @@ const LoadingScreen = () => {
           transition={{ duration: 0.6, ease: "easeOut" }}
         >
           <motion.img
-            src="/alkhwarizm-logo.png"
+            src="/skoolific-icon.png"
             alt="ALKHWARIZM Logo"
             className={styles.logo}
             animate={{ 
