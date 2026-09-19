@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Building2, User as UserIcon, Lock } from 'lucide-react';
+import { User as UserIcon, Lock } from 'lucide-react';
 import styles from './StaffLogin.module.css';
 import Input from './Input/Input';
 import Button from './Button/Button';
@@ -72,7 +72,6 @@ const StaffLogin = () => {
     
     // Validate all fields
     const newErrors = {};
-    if (!credentials.branchCode) newErrors.branchCode = t('auth.branchCode', 'Branch code') + ' ' + t('common.required', 'Required').toLowerCase();
     if (!credentials.username) newErrors.username = t('auth.username', 'Username') + ' ' + t('common.required', 'Required').toLowerCase();
     if (!credentials.password) newErrors.password = t('auth.password', 'Password') + ' ' + t('common.required', 'Required').toLowerCase();
     
@@ -90,6 +89,7 @@ const StaffLogin = () => {
     try {
       const response = await axios.post('/api/v2/branches/login', {
         ...credentials,
+        branchCode: credentials.branchCode?.toUpperCase() || 'BILAL',
         userType: 'staff'
       });
       
@@ -144,19 +144,7 @@ const StaffLogin = () => {
           )}
           
           <form onSubmit={handleSubmit} className={styles.form}>
-            <Input
-              label={t('auth.branchCode', 'Branch Code')}
-              name="branchCode"
-              value={credentials.branchCode}
-              onChange={(value) => handleInputChange('branchCode', value)}
-              onBlur={() => handleBlur('branchCode')}
-              icon={<Building2 size={20} />}
-              placeholder={t('auth.branchCodePlaceholder', 'Enter branch code')}
-              error={touched.branchCode && errors.branchCode}
-              disabled={isLoading || isLocked}
-              required
-            />
-            
+            {/* Single-school template: no branch code field */}
             <Input
               label={t('auth.username', 'Username')}
               name="username"

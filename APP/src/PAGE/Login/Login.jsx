@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { Building2, User as UserIcon, Lock } from 'lucide-react';
+import { User as UserIcon, Lock } from 'lucide-react';
 import styles from './Login.module.css';
 import { getPermissionPath } from '../../config/adminPermissions';
 import { ValidationRules, ErrorMessages } from '../../utils/validation';
@@ -82,10 +82,9 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setTouched({ username: true, password: true, branchCode: true });
+    setTouched({ username: true, password: true });
 
     const newErrors = {};
-    if (!ValidationRules.required(credentials.branchCode)) newErrors.branchCode = ErrorMessages.required;
     if (!ValidationRules.required(credentials.username)) newErrors.username = ErrorMessages.required;
     else if (!ValidationRules.minLength(3)(credentials.username)) newErrors.username = ErrorMessages.minLength(3);
     if (!ValidationRules.required(credentials.password)) newErrors.password = ErrorMessages.required;
@@ -102,7 +101,7 @@ const Login = () => {
     try {
       const response = await axios.post('/api/v2/branches/login', {
         ...credentials,
-        branchCode: credentials.branchCode.toUpperCase(),
+        branchCode: credentials.branchCode.toUpperCase() || 'BILAL',
         userType: 'admin'
       });
 
@@ -163,18 +162,8 @@ const Login = () => {
           </div>
 
           <form onSubmit={handleSubmit} className={styles.form}>
-            <Input
-              label={t('auth.branchCode', 'Branch Code')}
-              name="branchCode"
-              value={credentials.branchCode}
-              onChange={(v) => handleInputChange('branchCode', v)}
-              onBlur={() => handleBlur('branchCode')}
-              icon={<Building2 size={20} />}
-              placeholder={t('auth.branchCodePlaceholder', 'Enter branch code')}
-              error={touched.branchCode && errors.branchCode}
-              disabled={isLoading}
-              required
-            />
+            {/* Single-school template: no branch code — the school domain IS
+                the branch. Backend default-routes to this school's DB. */}
 
             <Input
               label={t('auth.username', 'Username')}
