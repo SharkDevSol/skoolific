@@ -110,6 +110,14 @@ const aiTestGeneratorRoutes = require('./routes/aiTestGenerator');
 // Database pool
 const pool = require('./config/db');
 
+// Single-school template: preload this school's branch code from branch_config
+const defaultBranchCodePromise = new Promise((resolve) => {
+  const q = () => pool.query(
+    "SELECT branch_code FROM public.branch_config WHERE is_active = true ORDER BY id LIMIT 1"
+  ).then(r => resolve(r.rows[0]?.branch_code || 'MAIN')).catch(() => { setTimeout(q, 3000); });
+  q();
+});
+
 // Global error handler
 const { errorHandler, onUncaughtException, onUnhandledRejection } = require('./middleware/errorHandler');
 
@@ -319,10 +327,25 @@ app.use((req, res, next) => {
   if (Array.isArray(branchCode)) branchCode = branchCode[0];
   if (branchCode && typeof branchCode === 'string') branchCode = branchCode.split(',')[0].trim();
   if (!branchCode) {
-    return res.status(400).json({
-      error: 'Branch code is required',
-      message: `All data operations require a branch code. Send X-Branch-Code header, ?branchCode=XXX query, or include in body. Path: ${req.path}`
-    });
+    // Single-school template: the school's own branch code IS the default.
+    // Preloaded at boot (see defaultBranchCodePromise below); 400 only if
+    // the lookup hasn't finished yet.
+    if (app.locals.defaultBranchCode) {
+      req.headers['x-branch-code'] = app.locals.defaultBranchCode;
+      return next();
+    }
+    defaultBranchCodePromise
+      .then((code) => {
+        req.headers['x-branch-code'] = code;
+        next();
+      })
+      .catch(() => {
+        res.status(400).json({
+          error: 'Branch code is required',
+          message: `All data operations require a branch code. Send X-Branch-Code header, ?branchCode=XXX query, or include in body. Path: ${req.path}`
+        });
+      });
+    return;
   }
   next();
 });

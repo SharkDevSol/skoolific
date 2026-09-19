@@ -12,12 +12,12 @@ describe('LoadingScreen', () => {
   describe('Rendering', () => {
     it('should render without crashing', () => {
       render(<LoadingScreen />);
-      expect(screen.getByAltText(/ONECO Logo/i)).toBeInTheDocument();
+      expect(screen.getByAltText(/School logo/i)).toBeInTheDocument();
     });
 
     it('should display brand name', () => {
       render(<LoadingScreen />);
-      expect(screen.getByAltText(/ONECO Logo/i)).toBeInTheDocument();
+      expect(screen.getByAltText(/School logo/i)).toBeInTheDocument();
     });
 
     it('should display subtitle', () => {
@@ -27,8 +27,8 @@ describe('LoadingScreen', () => {
 
     it('should display logo image', () => {
       render(<LoadingScreen />);
-      const logo = screen.getByAltText(/ONECO Logo/i);
-      expect(logo).toHaveAttribute('src', '/oneco.png');
+      const logo = screen.getByAltText(/School logo/i);
+      expect(logo).toHaveAttribute('src', '/skoolific-icon.png');
     });
   });
 
@@ -55,13 +55,13 @@ describe('LoadingScreen', () => {
   describe('Accessibility', () => {
     it('should have alt text for logo', () => {
       render(<LoadingScreen />);
-      const logo = screen.getByAltText(/ONECO Logo/i);
+      const logo = screen.getByAltText(/School logo/i);
       expect(logo).toHaveAccessibleName();
     });
 
     it('should have proper heading hierarchy', () => {
       render(<LoadingScreen />);
-      expect(screen.getByAltText(/ONECO Logo/i)).toBeInTheDocument();
+      expect(screen.getByAltText(/School logo/i)).toBeInTheDocument();
     });
   });
 });
