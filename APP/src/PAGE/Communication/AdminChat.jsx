@@ -10,7 +10,6 @@ import Button from '../../COMPONENTS/Button/Button';
 import Badge from '../../COMPONENTS/Badge/Badge';
 import { formatAPIError } from '../../utils/errorMessages';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'API_BASE_URL';
 import styles from './AdminChat.module.css';
 
 const AdminChat = () => {
@@ -23,6 +22,8 @@ const AdminChat = () => {
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageText, setMessageText] = useState('');
+  const [attachment, setAttachment] = useState(null); // media: image/video/file
+  const fileInputRef = useRef(null);
   const [sending, setSending] = useState(false);
   const socketRef = useRef(null);
 
@@ -32,7 +33,7 @@ const AdminChat = () => {
 
   useEffect(() => {
     // Initialize Socket.IO
-    socketRef.current = io('API_BASE_URL');
+    socketRef.current = io(window.location.origin);
     socketRef.current.emit('join', currentUserId);
 
     // Listen for new messages
@@ -91,7 +92,7 @@ const AdminChat = () => {
 
   const fetchGuardians = async () => {
     try {
-      const res = await axios.get('API_BASE_URL/api/chats/contacts/guardians');
+      const res = await axios.get(`/api/chats/contacts/guardians`);
       setGuardians(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error('Error fetching guardians:', error);
@@ -102,7 +103,7 @@ const AdminChat = () => {
 
   const fetchConversations = async () => {
     try {
-      const res = await axios.get(`API_BASE_URL/api/chats/conversations?userId=${currentUserId}`);
+      const res = await axios.get(`/api/chats/conversations?userId=${currentUserId}`);
       const data = Array.isArray(res.data) ? res.data : [];
       setConversations(data.map(c => ({ ...c, currentUserId })));
     } catch (error) {
@@ -115,11 +116,11 @@ const AdminChat = () => {
       setMessagesLoading(true);
     }
     try {
-      const res = await axios.get(`API_BASE_URL/api/chats/conversations/${conversationId}/messages`);
+      const res = await axios.get(`/api/chats/conversations/${conversationId}/messages`);
       setMessages(res.data);
       
       // Mark as read
-      await axios.put('API_BASE_URL/api/chats/messages/read', {
+      await axios.put('/api/chats/messages/read', {
         conversationId,
         userId: currentUserId
       });
@@ -156,7 +157,7 @@ const AdminChat = () => {
     
     try {
       // Create or get conversation
-      const res = await axios.post('API_BASE_URL/api/chats/conversations', {
+      const res = await axios.post(`/api/chats/conversations`, {
         type: 'admin_guardian',
         participants: [
           { user_id: currentUserId, user_type: 'admin', user_name: currentUserName },
@@ -168,7 +169,7 @@ const AdminChat = () => {
       const convId = res.data.id;
       
       // Fetch full conversation details
-      const convRes = await axios.get(`API_BASE_URL/api/chats/conversations/${convId}`);
+      const convRes = await axios.get(`/api/chats/conversations/${convId}`);
       console.log('Full conversation:', convRes.data);
       setActiveConversation(convRes.data);
       
@@ -194,7 +195,7 @@ const AdminChat = () => {
   const handleSendMessage = async (formData) => {
     try {
       const res = await axios.post(
-        `API_BASE_URL/api/chats/conversations/${activeConversation.id}/messages`,
+        `/api/chats/conversations/${activeConversation.id}/messages`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
@@ -235,6 +236,9 @@ const AdminChat = () => {
       formData.append('senderType', currentUserType);
       formData.append('senderName', currentUserName);
       formData.append('messageText', messageText.trim());
+      if (attachment) {
+        formData.append('attachment', attachment); // media file (image/video/doc)
+      }
 
       console.log('Sending message to conversation:', activeConversation.id);
       console.log('FormData:', {
@@ -247,6 +251,7 @@ const AdminChat = () => {
       await handleSendMessage(formData);
       console.log('Message sent successfully!');
       setMessageText('');
+      setAttachment(null);
     } catch (error) {
       console.error('Error sending message:', error);
       console.error('Error response:', error.response?.data);
@@ -337,6 +342,26 @@ const AdminChat = () => {
               
               {/* Input at TOP */}
               <div className={styles.topInputArea}>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                />
+                <button
+                  type="button"
+                  className={styles.attachBtn}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending}
+                  title="Attach image, video or file"
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: 20, padding: '0 6px', opacity: attachment ? 1 : 0.6
+                  }}
+                >
+                  📎{attachment ? ' ✅' : ''}
+                </button>
                 <textarea
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
@@ -346,7 +371,7 @@ const AdminChat = () => {
                       handleSendMessageDirect();
                     }
                   }}
-                  placeholder={t('communication.messages.typePlaceholder', 'Type your message here...')}
+                  placeholder={attachment ? `Sending "${attachment.name}" — type a message...` : t('communication.messages.typePlaceholder', 'Type your message here...')}
                   rows={2}
                   disabled={sending}
                   className={styles.topInput}
@@ -384,6 +409,18 @@ const AdminChat = () => {
                           )}
                           {message.message_text && (
                             <div className={styles.messageText}>{message.message_text}</div>
+                          )}
+                          {message.attachments && message.attachments.length > 0 && (
+                            <div className={styles.messageAttachments}>
+                              {message.attachments.map((att, ai) => {
+                                const url = att.url || att.path || '';
+                                const isImg = /\.(png|jpe?g|gif|webp|gif)$/i.test(url);
+                                const isVid = /\.(mp4|webm|mov|avi)$/i.test(url);
+                                if (isImg) return <img key={ai} src={url} alt="attachment" className={styles.attachmentImg} style={{ maxWidth: 220, borderRadius: 8, marginTop: 6 }} />;
+                                if (isVid) return <video key={ai} src={url} controls className={styles.attachmentVid} style={{ maxWidth: 220, borderRadius: 8, marginTop: 6 }} />;
+                                return <a key={ai} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 6 }}>📎 {att.name || 'File'}</a>;
+                              })}
+                            </div>
                           )}
                           <div className={styles.messageTime}>
                             {new Date(message.created_at).toLocaleTimeString('en-US', { 
