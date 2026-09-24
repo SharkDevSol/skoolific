@@ -8,12 +8,14 @@ import ConversationList from '../../COMPONENTS/Chat/ConversationList';
 import Input from '../../COMPONENTS/Input/Input';
 import Button from '../../COMPONENTS/Button/Button';
 import Badge from '../../COMPONENTS/Badge/Badge';
+import { useApp } from '../../context/AppContext';
 import { formatAPIError } from '../../utils/errorMessages';
 
 import styles from './AdminChat.module.css';
 
 const AdminChat = () => {
   const { t } = useTranslation();
+  const { profile } = useApp();
   const [guardians, setGuardians] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
@@ -28,7 +30,9 @@ const AdminChat = () => {
   const socketRef = useRef(null);
 
   const currentUserId = 'admin_1'; // Get from localStorage in production
-  const currentUserName = 'Admin';
+  // FIX (1C): use the PROFILE name from Settings (not the hardcoded 'Admin')
+  // so notifications say "[Profile Name] sent you message"
+  const currentUserName = (profile && profile.name && profile.name.trim()) || 'Admin';
   const currentUserType = 'admin';
 
   useEffect(() => {
